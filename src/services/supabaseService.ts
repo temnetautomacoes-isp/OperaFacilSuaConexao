@@ -30,8 +30,10 @@ export const supabaseService = {
       imageUrl: d.image_url || '',
       supplierId: d.supplier_id,
       supplierName: d.supplier_name,
+      manufacturingDate: d.manufacturing_date,
       expirationDate: d.expiration_date,
       batchNumber: d.batch_number,
+      batches: d.batches || [],
       updatedAt: d.updated_at,
     }));
   },
@@ -50,8 +52,10 @@ export const supabaseService = {
       image_url: product.imageUrl,
       supplier_id: product.supplierId,
       supplier_name: product.supplierName,
+      manufacturing_date: product.manufacturingDate,
       expiration_date: product.expirationDate,
       batch_number: product.batchNumber,
+      batches: product.batches || [],
       updated_at: new Date().toISOString(),
     });
   },

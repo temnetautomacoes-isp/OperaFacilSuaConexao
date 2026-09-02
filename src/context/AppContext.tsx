@@ -615,7 +615,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           activeWithExp.sort((a, b) => (a.expirationDate || '').localeCompare(b.expirationDate || ''));
           const nearestExp = activeWithExp[0]?.expirationDate || newBatch.expirationDate || p.expirationDate;
 
-          return {
+          const updatedProd = {
             ...p,
             stock: totalStock,
             batches: updatedBatches,
@@ -624,6 +624,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             batchNumber: newBatch.batchNumber || p.batchNumber,
             updatedAt: new Date().toISOString(),
           };
+          supabaseService.saveProduct(updatedProd).catch(console.error);
+          return updatedProd;
         }
         return p;
       })
@@ -631,7 +633,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearAllStock = () => {
-    setProducts((prev) => prev.map((p) => ({ ...p, stock: 0, batches: [], updatedAt: new Date().toISOString() })));
+    setProducts((prev) => {
+      const updated = prev.map((p) => ({ ...p, stock: 0, batches: [], updatedAt: new Date().toISOString() }));
+      updated.forEach((p) => supabaseService.saveProduct(p).catch(console.error));
+      return updated;
+    });
     showNotification('Todo o estoque foi zerado com sucesso (0 unidades em todos os itens).');
   };
 
