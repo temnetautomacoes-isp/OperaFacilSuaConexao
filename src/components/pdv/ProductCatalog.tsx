@@ -17,14 +17,14 @@ import { ProductDetailModal } from '../common/ProductDetailModal';
 
 const CATEGORIES: ('Todas' | ProductCategory)[] = [
   'Todas',
-  'Mercearia',
-  'Bebidas',
-  'Laticínios & Frios',
-  'Padaria',
-  'Hortifruti',
-  'Higiene & Limpeza',
-  'Doces & Snacks',
-  'Açougue'
+  'Fibra Óptica',
+  'Roteadores & Wi-Fi',
+  'ONUs & Modems',
+  'Cabos & Conectores',
+  'Equipamentos de Rede',
+  'Ferramentas & EPI',
+  'Acessórios & Suprimentos',
+  'Serviços & Planos'
 ];
 
 interface ProductCatalogProps {

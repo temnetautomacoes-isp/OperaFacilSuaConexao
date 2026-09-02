@@ -32,14 +32,14 @@ import { StockEntryModal } from './StockEntryModal';
 
 const DEFAULT_CATEGORIES: ('Todas' | ProductCategory)[] = [
   'Todas',
-  'Mercearia',
-  'Bebidas',
-  'Laticínios & Frios',
-  'Padaria',
-  'Hortifruti',
-  'Higiene & Limpeza',
-  'Doces & Snacks',
-  'Açougue',
+  'Fibra Óptica',
+  'Roteadores & Wi-Fi',
+  'ONUs & Modems',
+  'Cabos & Conectores',
+  'Equipamentos de Rede',
+  'Ferramentas & EPI',
+  'Acessórios & Suprimentos',
+  'Serviços & Planos',
 ];
 
 const ICONS = ['🍚', '🥣', '🌻', '🧂', '☕', '🥛', '🥤', '💧', '🍺', '🧼', '🧺', '🧻', '🥖', '🧈', '🧀', '🍌', '🍅', '🍪', '🍫', '🥩', '🥚', '🍎', '📦'];
@@ -100,7 +100,7 @@ export const EstoqueModule: React.FC = () => {
   // Form states
   const [formBarcode, setFormBarcode] = useState('');
   const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState<ProductCategory>('Mercearia');
+  const [formCategory, setFormCategory] = useState<ProductCategory>('Fibra Óptica');
   const [formUnit, setFormUnit] = useState<ProductUnit>('un');
   const [formCostPrice, setFormCostPrice] = useState('0.00');
   const [formSalePrice, setFormSalePrice] = useState('0.00');
@@ -197,7 +197,7 @@ export const EstoqueModule: React.FC = () => {
   const handleOpenAddModal = () => {
     const latestGondola = getSavedGondolaCategories();
     setGondolaCategories(latestGondola);
-    const defaultCat = latestGondola.find((c) => c.category !== 'Todas')?.category || 'Mercearia';
+    const defaultCat = latestGondola.find((c) => c.category !== 'Todas')?.category || 'Fibra Óptica';
 
     setEditingProductId(null);
     setFormBarcode(`789${Math.floor(1000000000 + Math.random() * 9000000000)}`);

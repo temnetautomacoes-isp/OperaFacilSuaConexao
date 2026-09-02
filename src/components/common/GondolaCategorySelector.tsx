@@ -19,6 +19,7 @@ import {
   Check
 } from 'lucide-react';
 import { safeGetItem, safeSetItem } from '../../utils/safeStorage';
+import { supabaseService } from '../../services/supabaseService';
 
 export interface GondolaCategoryItem {
   category: 'Todas' | ProductCategory | string;
@@ -38,71 +39,78 @@ export const DEFAULT_GONDOLA_CATEGORIES: GondolaCategoryItem[] = [
   {
     category: 'Todas',
     label: 'Todas as Seções',
-    aisle: 'Loja Completa',
-    icon: '🏪',
+    aisle: 'Geral',
+    icon: '🏢',
   },
   {
-    category: 'Mercearia',
-    label: 'Mercearia & Grãos',
+    category: 'Fibra Óptica',
+    label: 'Fibra Óptica & Drop',
     aisle: 'Corredor 01',
-    icon: '🍚',
+    icon: '🧵',
   },
   {
-    category: 'Bebidas',
-    label: 'Bebidas & Sucos',
+    category: 'Roteadores & Wi-Fi',
+    label: 'Roteadores & Mesh',
     aisle: 'Corredor 02',
-    icon: '🥤',
+    icon: '📶',
   },
   {
-    category: 'Laticínios & Frios',
-    label: 'Laticínios & Frios',
+    category: 'ONUs & Modems',
+    label: 'ONUs & GPON/EPON',
     aisle: 'Corredor 03',
-    icon: '🧀',
+    icon: '📟',
   },
   {
-    category: 'Padaria',
-    label: 'Padaria & Pães',
+    category: 'Cabos & Conectores',
+    label: 'Cabos & Conectividade',
     aisle: 'Corredor 04',
-    icon: '🥖',
+    icon: '🔌',
   },
   {
-    category: 'Hortifruti',
-    label: 'Hortifruti & Frescos',
+    category: 'Equipamentos de Rede',
+    label: 'Switches & OLTs',
     aisle: 'Corredor 05',
-    icon: '🍎',
+    icon: '🖥️',
   },
   {
-    category: 'Higiene & Limpeza',
-    label: 'Higiene & Limpeza',
+    category: 'Ferramentas & EPI',
+    label: 'Ferramentas & Máquinas',
     aisle: 'Corredor 06',
-    icon: '🧼',
+    icon: '🛠️',
   },
   {
-    category: 'Doces & Snacks',
-    label: 'Doces & Snacks',
+    category: 'Acessórios & Suprimentos',
+    label: 'Fixação & Suprimentos',
     aisle: 'Corredor 07',
-    icon: '🍫',
+    icon: '📦',
   },
   {
-    category: 'Açougue',
-    label: 'Açougue & Carnes',
+    category: 'Serviços & Planos',
+    label: 'Serviços & Instalações',
     aisle: 'Corredor 08',
-    icon: '🥩',
+    icon: '⚡',
   },
 ];
 
 export const GONDOLA_CATEGORIES = DEFAULT_GONDOLA_CATEGORIES;
 
 const QUICK_EMOJIS = [
-  '🍚', '🥤', '🧀', '🥖', '🍎', '🧼', '🍫', '🥩',
-  '🔌', '📶', '🛠️', '💻', '📦', '🏷️', '💡', '🔧',
-  '📡', '🔋', '🛒', '☕', '🍗', '🧊', '🧴', '🍪',
-  '🍕', '🥦', '🥕', '🧃', '🍬', '🧹', '🧺', '🖥️'
+  '🧵', '📶', '📟', '🔌', '🖥️', '🛠️', '📦', '⚡',
+  '💻', '🏷️', '💡', '🔧', '📡', '🔋', '🛒', '☕',
+  '🔒', '⚙️', '🧰', '🧱', '📍', '🏢', '🏷️', '📱',
+  '🛰️', '🎧', '📋', '🖨️', '💾', '💿', '📏', '🪙'
 ];
 
 export const getSavedGondolaCategories = (): GondolaCategoryItem[] => {
   const saved = safeGetItem<GondolaCategoryItem[]>('operafacil_gondola_categories', null);
   if (saved && Array.isArray(saved) && saved.length > 0) {
+    // Se o usuário tinha as categorias antigas de mercado salvas por padrão (Mercearia, Bebidas, etc.)
+    const isLegacySupermarket = saved.some(s => ['Mercearia', 'Bebidas', 'Laticínios & Frios', 'Padaria', 'Açougue'].includes(String(s.category)));
+    if (isLegacySupermarket) {
+      safeSetItem('operafacil_gondola_categories', DEFAULT_GONDOLA_CATEGORIES);
+      supabaseService.saveGondolaCategories(DEFAULT_GONDOLA_CATEGORIES).catch(console.error);
+      return DEFAULT_GONDOLA_CATEGORIES;
+    }
     return saved;
   }
   return DEFAULT_GONDOLA_CATEGORIES;
@@ -134,13 +142,22 @@ export const GondolaCategorySelector: React.FC<GondolaCategorySelectorProps> = (
   const [formAisle, setFormAisle] = useState('');
   const [formIcon, setFormIcon] = useState('📦');
 
-  // Synchronize on custom storage events
+  // Synchronize on custom storage events and initial cloud fetch
   useEffect(() => {
     const handleSync = () => {
       setCategories(getSavedGondolaCategories());
     };
     window.addEventListener('gondola_categories_updated', handleSync);
     window.addEventListener('storage', handleSync);
+
+    // Initial check against Supabase
+    supabaseService.fetchGondolaCategories().then((cloudCats) => {
+      if (cloudCats && cloudCats.length > 0) {
+        setCategories(cloudCats);
+        safeSetItem('operafacil_gondola_categories', cloudCats);
+      }
+    }).catch(console.error);
+
     return () => {
       window.removeEventListener('gondola_categories_updated', handleSync);
       window.removeEventListener('storage', handleSync);
@@ -150,6 +167,7 @@ export const GondolaCategorySelector: React.FC<GondolaCategorySelectorProps> = (
   const saveCategories = (newCategories: GondolaCategoryItem[]) => {
     setCategories(newCategories);
     safeSetItem('operafacil_gondola_categories', newCategories);
+    supabaseService.saveGondolaCategories(newCategories).catch(console.error);
     window.dispatchEvent(new Event('gondola_categories_updated'));
   };
 
@@ -236,6 +254,7 @@ export const GondolaCategorySelector: React.FC<GondolaCategorySelectorProps> = (
     if (confirm(`Deseja remover a seção "${cat.label}" da gôndola?`)) {
       const updated = categories.filter((_, i) => i !== index);
       saveCategories(updated);
+      supabaseService.deleteGondolaCategory(String(cat.category)).catch(console.error);
       if (selectedCategory === cat.category) {
         onSelectCategory('Todas');
       }

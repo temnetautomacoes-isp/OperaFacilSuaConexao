@@ -328,7 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     async function loadCloudData() {
       try {
-        const [cloudProducts, cloudUsers, cloudDivisions, cloudDocs, cloudTime, cloudFinancial, cloudSuppliers] = await Promise.allSettled([
+        const [cloudProducts, cloudUsers, cloudDivisions, cloudDocs, cloudTime, cloudFinancial, cloudSuppliers, cloudCategories] = await Promise.allSettled([
           supabaseService.fetchProducts(),
           supabaseService.fetchUsers(),
           supabaseService.fetchDivisions(),
@@ -336,7 +336,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabaseService.fetchTimeRecords(),
           supabaseService.fetchFinancialEntries(),
           supabaseService.fetchSuppliers(),
+          supabaseService.fetchGondolaCategories(),
         ]);
+
+        if (cloudCategories.status === 'fulfilled') {
+          if (cloudCategories.value.length > 0) {
+            safeSetItem('operafacil_gondola_categories', cloudCategories.value);
+            window.dispatchEvent(new Event('gondola_categories_updated'));
+          } else {
+            const saved = localStorage.getItem('operafacil_gondola_categories');
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  supabaseService.saveGondolaCategories(parsed).catch(console.error);
+                }
+              } catch {}
+            }
+          }
+        }
 
         if (cloudProducts.status === 'fulfilled') {
           if (cloudProducts.value.length > 0) {
@@ -462,6 +480,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, async () => {
         const fresh = await supabaseService.fetchSuppliers();
         if (fresh.length > 0) setSuppliers(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gondola_categories' }, async () => {
+        const fresh = await supabaseService.fetchGondolaCategories();
+        if (fresh.length > 0) {
+          safeSetItem('operafacil_gondola_categories', fresh);
+          window.dispatchEvent(new Event('gondola_categories_updated'));
+        }
       })
       .subscribe();
 

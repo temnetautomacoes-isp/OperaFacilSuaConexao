@@ -2,15 +2,66 @@ import { supabase } from '../lib/supabase';
 import { Product, UserAccount, CompanyDivision, EmployeeDocument, TimeClockRecord, FinancialEntry, Supplier } from '../types';
 
 export interface GondolaCategoryItem {
-  id: string;
-  name: string;
-  aisle?: string;
-  icon?: string;
-  color?: string;
-  displayOrder?: number;
+  category: string;
+  label: string;
+  aisle: string;
+  icon: string;
+  accent?: {
+    bg: string;
+    border: string;
+    text: string;
+    badgeBg: string;
+    gondolaTrim: string;
+  };
 }
 
 export const supabaseService = {
+  // -------------------------------------------------------------
+  // GONDOLA CATEGORIES
+  // -------------------------------------------------------------
+  async fetchGondolaCategories(): Promise<GondolaCategoryItem[]> {
+    const { data, error } = await supabase
+      .from('gondola_categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error || !data || data.length === 0) return [];
+    return data.map((c) => ({
+      category: c.id,
+      label: c.name || c.id,
+      aisle: c.aisle || 'Corredor',
+      icon: c.icon || '📦',
+      accent: c.color && c.color.startsWith('{') ? JSON.parse(c.color) : undefined,
+    }));
+  },
+
+  async saveGondolaCategories(categories: GondolaCategoryItem[]): Promise<void> {
+    if (!categories || categories.length === 0) return;
+    const rows = categories.map((cat, idx) => ({
+      id: cat.category,
+      name: cat.label || cat.category,
+      aisle: cat.aisle || '',
+      icon: cat.icon || '📦',
+      color: cat.accent ? JSON.stringify(cat.accent) : null,
+      display_order: idx,
+      created_at: new Date().toISOString(),
+    }));
+    await supabase.from('gondola_categories').upsert(rows);
+  },
+
+  async deleteGondolaCategory(categoryKey: string): Promise<void> {
+    await supabase.from('gondola_categories').delete().eq('id', categoryKey);
+  },
+
+  async clearGondolaCategoriesNotIn(validIds: string[]): Promise<void> {
+    if (!validIds || validIds.length === 0) return;
+    const { data } = await supabase.from('gondola_categories').select('id');
+    if (data && data.length > 0) {
+      const toDelete = data.filter((row) => !validIds.includes(row.id)).map((row) => row.id);
+      for (const id of toDelete) {
+        await supabase.from('gondola_categories').delete().eq('id', id);
+      }
+    }
+  },
   // -------------------------------------------------------------
   // PRODUCTS
   // -------------------------------------------------------------

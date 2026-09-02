@@ -1,12 +1,12 @@
 export type ProductCategory = 
-  | 'Mercearia'
-  | 'Bebidas'
-  | 'Laticínios & Frios'
-  | 'Hortifruti'
-  | 'Higiene & Limpeza'
-  | 'Padaria'
-  | 'Doces & Snacks'
-  | 'Açougue'
+  | 'Fibra Óptica'
+  | 'Roteadores & Wi-Fi'
+  | 'ONUs & Modems'
+  | 'Cabos & Conectores'
+  | 'Equipamentos de Rede'
+  | 'Ferramentas & EPI'
+  | 'Acessórios & Suprimentos'
+  | 'Serviços & Planos'
   | (string & {});
 
 export type ProductUnit = 'un' | 'kg' | 'pct' | 'cx' | 'l' | 'g';
