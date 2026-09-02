@@ -31,6 +31,7 @@ import {
   INITIAL_DIVISIONS
 } from '../data/initialData';
 import { safeSetItem } from '../utils/safeStorage';
+import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 
 export type Environment = 'colaborador' | 'erp' | 'pdv';
@@ -295,7 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Carregamento inicial direto do Supabase Cloud Database
+  // Carregamento inicial e sincronização em tempo real (Realtime) do Supabase Cloud Database
   useEffect(() => {
     async function loadCloudData() {
       try {
@@ -309,7 +310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabaseService.fetchSuppliers(),
         ]);
 
-        if (cloudProducts.status === 'fulfilled' && cloudProducts.value.length > 0) {
+        if (cloudProducts.status === 'fulfilled') {
           setProducts(cloudProducts.value);
         }
         if (cloudUsers.status === 'fulfilled' && cloudUsers.value.length > 0) {
@@ -324,7 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cloudTime.status === 'fulfilled' && cloudTime.value.length > 0) {
           setTimeRecords(cloudTime.value);
         }
-        if (cloudFinancial.status === 'fulfilled' && cloudFinancial.value.length > 0) {
+        if (cloudFinancial.status === 'fulfilled') {
           setFinancialEntries(cloudFinancial.value);
         }
         if (cloudSuppliers.status === 'fulfilled' && cloudSuppliers.value.length > 0) {
@@ -336,6 +337,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     loadCloudData();
+
+    // Re-sincronizar ao focar na janela / alternar de aba
+    const handleFocus = () => loadCloudData();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
+
+    // Canal Realtime do Supabase (WebSocket bidirecional instantâneo entre celular e computador)
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async () => {
+        const fresh = await supabaseService.fetchProducts();
+        setProducts(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, async () => {
+        const fresh = await supabaseService.fetchUsers();
+        if (fresh.length > 0) setUsers(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_divisions' }, async () => {
+        const fresh = await supabaseService.fetchDivisions();
+        if (fresh.length > 0) setDivisions(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_documents' }, async () => {
+        const fresh = await supabaseService.fetchDocuments();
+        if (fresh.length > 0) setEmployeeDocuments(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_clock_records' }, async () => {
+        const fresh = await supabaseService.fetchTimeRecords();
+        if (fresh.length > 0) setTimeRecords(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_entries' }, async () => {
+        const fresh = await supabaseService.fetchFinancialEntries();
+        setFinancialEntries(fresh);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, async () => {
+        const fresh = await supabaseService.fetchSuppliers();
+        if (fresh.length > 0) setSuppliers(fresh);
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Sync to local storage safely with auto quota recovery
