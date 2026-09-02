@@ -11,7 +11,8 @@ import {
   HelpCircle,
   LogOut,
   UserCheck,
-  ShieldAlert
+  ShieldAlert,
+  Menu
 } from 'lucide-react';
 import { OperatorProfileModal } from './common/OperatorProfileModal';
 import logoImg from '../assets/operafacil_logo.png';
@@ -28,7 +29,8 @@ export const TopBar: React.FC = () => {
     closeCashRegister, 
     activeNotification,
     showNotification,
-    products
+    products,
+    setMobileSidebarOpen
   } = useApp();
 
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -88,13 +90,26 @@ export const TopBar: React.FC = () => {
   const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
 
   return (
-    <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-      {/* Brand & Slogan */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-white p-0.5 shadow-md flex items-center justify-center overflow-hidden shrink-0 border border-orange-400/40">
+    <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between border-b border-slate-800">
+      {/* Brand, Hamburger & Slogan */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Mobile Hamburger Menu Button (ERP) */}
+        {environment === 'erp' && (
+          <button
+            type="button"
+            id="btn-topbar-mobile-menu"
+            onClick={() => setMobileSidebarOpen(true)}
+            className="lg:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800 active:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+            title="Abrir Menu de Navegação"
+          >
+            <Menu className="w-5 h-5 text-orange-400" />
+          </button>
+        )}
+
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white p-0.5 shadow-md flex items-center justify-center overflow-hidden shrink-0 border border-orange-400/40">
           <img
             src={settings.logoUrl || logoImg}
-            alt="MercadoFácil"
+            alt="OperaFácil"
             className="w-full h-full object-contain rounded-lg"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
@@ -102,15 +117,15 @@ export const TopBar: React.FC = () => {
           />
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-extrabold text-lg leading-tight tracking-tight text-white flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <h1 className="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-white flex items-center gap-1.5">
               {settings.name}
             </h1>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-orange-500 text-white shadow-xs">
-              ERP Telecom
+            <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-orange-500 text-white shadow-xs">
+              Telecom
             </span>
           </div>
-          <p className="text-xs text-orange-200/90 font-medium italic flex items-center gap-1">
+          <p className="hidden sm:flex text-xs text-orange-200/90 font-medium italic items-center gap-1">
             <Sparkles className="w-3 h-3 text-orange-400 inline" />
             "{settings.slogan}"
           </p>

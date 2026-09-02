@@ -49,6 +49,10 @@ interface AppContextType {
   setEnvironment: (env: Environment) => void;
   erpModule: ErpModule;
   setErpModule: (mod: ErpModule) => void;
+  isSidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  isMobileSidebarOpen: boolean;
+  setMobileSidebarOpen: (open: boolean) => void;
   
   // Divisões e Organograma (RH)
   divisions: CompanyDivision[];
@@ -278,6 +282,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cartDiscount, setCartDiscount] = useState<number>(0);
   const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
   const [activeNotification, setActiveNotification] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('operafacil_sidebar_collapsed') === 'true';
+  });
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('operafacil_sidebar_collapsed', String(next));
+      return next;
+    });
+  };
 
   // Carregamento inicial direto do Supabase Cloud Database
   useEffect(() => {
@@ -1458,6 +1474,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeNotification,
         showNotification,
         resetAllData,
+        isSidebarCollapsed,
+        toggleSidebar,
+        isMobileSidebarOpen,
+        setMobileSidebarOpen,
       }}
     >
       {children}

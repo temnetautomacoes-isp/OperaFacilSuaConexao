@@ -1,177 +1,251 @@
 import React, { useState } from 'react';
-import { useApp, ErpModule } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { 
   LayoutDashboard, 
   Package, 
-  Receipt, 
   Wallet, 
-  BarChart3, 
   Settings, 
-  ShoppingCart, 
   Sparkles, 
   AlertTriangle,
-  LogOut,
-  UserCheck,
   Users,
-  ShieldAlert
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { OperatorProfileModal } from '../common/OperatorProfileModal';
 
 export const ErpSidebar: React.FC = () => {
-  const { erpModule, setErpModule, setEnvironment, products, users, settings, currentUser, logout } = useApp();
+  const { 
+    erpModule, 
+    setErpModule, 
+    products, 
+    users, 
+    settings, 
+    currentUser, 
+    logout,
+    isSidebarCollapsed,
+    toggleSidebar,
+    isMobileSidebarOpen,
+    setMobileSidebarOpen
+  } = useApp();
+
   const [showOperatorProfile, setShowOperatorProfile] = useState(false);
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
 
   const navItems = [
-    { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, allowed: true },
+    { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, allowed: true },
     { 
       id: 'estoque' as const, 
       label: 'Estoque / Produtos', 
-      icon: <Package className="w-4 h-4" />, 
+      icon: <Package className="w-5 h-5 shrink-0" />, 
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessEstoque !== false,
     },
     { 
       id: 'rh' as const, 
       label: 'Recursos Humanos (RH)', 
-      icon: <Users className="w-4 h-4" />, 
+      icon: <Users className="w-5 h-5 shrink-0" />, 
       badge: users.length > 0 ? users.length : undefined,
       allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessRh !== false,
     },
     { 
       id: 'configuracoes' as const, 
       label: 'Configurações', 
-      icon: <Settings className="w-4 h-4" />,
+      icon: <Settings className="w-5 h-5 shrink-0" />,
       allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessConfiguracoes !== false,
     },
   ].filter((item) => item.allowed);
 
+  const handleSelectModule = (mod: typeof erpModule) => {
+    setErpModule(mod);
+    setMobileSidebarOpen(false);
+  };
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between h-full shadow-xs shrink-0">
-      {/* Top Sidebar section */}
-      <div>
-        {/* Quick Action: Financeiro */}
-        {(currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessFinanceiro !== false) && (
-          <div className="p-3 border-b border-slate-100">
+    <>
+      {/* Mobile Backdrop Overlay */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 lg:hidden transition-opacity animate-in fade-in duration-200"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Container (Responsive: Drawer on Mobile, Expandable/Collapsible on Desktop) */}
+      <aside 
+        className={`
+          fixed lg:static inset-y-0 left-0 z-50
+          bg-white border-r border-slate-200 flex flex-col justify-between h-full shadow-lg lg:shadow-xs shrink-0
+          transition-all duration-300 ease-in-out
+          ${isMobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'}
+          ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
+        `}
+      >
+        {/* Top Sidebar Header with Collapse Button & Mobile Close Button */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Header Bar */}
+          <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+            <div className={`flex items-center gap-2 overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+              <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                OP
+              </div>
+              <span className="font-black text-xs uppercase tracking-wider text-slate-800 truncate">
+                Menu Gestão
+              </span>
+            </div>
+
+            {/* Mobile Close Button (X) */}
             <button
               type="button"
-              id="btn-sidebar-financeiro-main"
-              onClick={() => setErpModule('financeiro')}
-              className={`w-full py-3 px-3 rounded-lg text-sm font-black tracking-wide flex items-center justify-center gap-2.5 shadow-xs transition-all cursor-pointer ${
-                erpModule === 'financeiro'
-                  ? 'bg-slate-900 text-white ring-2 ring-orange-500 shadow-md scale-[1.02]'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white'
-              }`}
+              onClick={() => setMobileSidebarOpen(false)}
+              className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              title="Fechar Menu"
             >
-              <Wallet className="w-5 h-5 text-orange-400" />
-              <span className="text-sm font-extrabold uppercase tracking-wide">Financeiro</span>
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Desktop Collapse / Expand Button */}
+            <button
+              type="button"
+              id="btn-toggle-sidebar"
+              onClick={toggleSidebar}
+              className="hidden lg:flex p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer ml-auto"
+              title={isSidebarCollapsed ? 'Expandir barra lateral' : 'Minimizar barra lateral (liberar espaço)'}
+            >
+              {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
           </div>
-        )}
 
-        {/* Navigation List */}
-        <nav className="p-3 space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400 px-3 tracking-wider block mb-1">
-            Gestão & Controle
-          </span>
-          {navItems.map((item) => {
-            const isActive = erpModule === item.id;
-            return (
+          {/* Quick Action: Financeiro */}
+          {(currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessFinanceiro !== false) && (
+            <div className="p-3 border-b border-slate-100">
               <button
-                key={item.id}
-                id={`erp-tab-${item.id}`}
-                onClick={() => setErpModule(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs font-bold'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                type="button"
+                id="btn-sidebar-financeiro-main"
+                onClick={() => handleSelectModule('financeiro')}
+                title="Acessar Módulo Financeiro"
+                className={`w-full py-3 rounded-xl text-sm font-black tracking-wide flex items-center justify-center gap-2.5 shadow-xs transition-all cursor-pointer ${
+                  erpModule === 'financeiro'
+                    ? 'bg-slate-900 text-white ring-2 ring-orange-500 shadow-md scale-[1.02]'
+                    : 'bg-slate-900 hover:bg-slate-800 text-white'
+                } ${isSidebarCollapsed ? 'lg:px-2' : 'px-3'}`}
               >
-                <div className="flex items-center gap-2.5">
-                  <span className={isActive ? 'text-orange-500' : 'text-slate-400'}>
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
-                </div>
-
-                {item.badge !== undefined && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300">
-                    {item.badge}
-                  </span>
-                )}
+                <Wallet className="w-5 h-5 text-orange-400 shrink-0" />
+                <span className={`text-xs font-extrabold uppercase tracking-wide truncate ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                  Financeiro
+                </span>
               </button>
-            );
-          })}
-        </nav>
-      </div>
+            </div>
+          )}
 
-      {/* Bottom Store Slogan, User Profile & mini status */}
-      <div className="p-3 border-t border-slate-100 bg-slate-50/70 space-y-2.5 text-xs">
-        {currentUser && (
-          <div className="p-2 bg-white border border-slate-200 rounded-lg flex items-center justify-between shadow-xs gap-2">
-            <button
-              type="button"
-              onClick={() => setShowOperatorProfile(true)}
-              title="Clique para ver o perfil do operador"
-              className="flex items-center gap-2 overflow-hidden text-left hover:bg-slate-50 p-1 rounded transition-colors flex-1 cursor-pointer group"
-            >
-              <div className="relative shrink-0">
-                {currentUser.avatarUrl ? (
-                  <img
-                    src={currentUser.avatarUrl}
-                    alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover border border-orange-500 ring-1 ring-orange-200"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="text-base">{currentUser.avatar || '👤'}</span>
-                )}
-                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 border border-white"></span>
-              </div>
-              <div className="flex flex-col text-left overflow-hidden">
-                <span className="font-bold text-slate-800 text-xs truncate group-hover:text-orange-600">
-                  {currentUser.name}
-                </span>
-                <span className="text-[10px] uppercase font-semibold text-orange-600">
-                  {currentUser.role === 'superadmin' ? '👑 Super Administrador' : currentUser.role === 'admin' ? 'Administrador' : `Op. #${currentUser.operatorNumber || '02'}`}
-                </span>
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                logout();
-              }}
-              title="Sair do Sistema"
-              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-[10px] font-bold uppercase leading-none">SAIR</span>
-            </button>
-          </div>
-        )}
+          {/* Navigation List */}
+          <nav className="p-2.5 space-y-1">
+            <span className={`text-[10px] uppercase font-bold text-slate-400 px-2 tracking-wider block mb-1.5 ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+              Navegação
+            </span>
+            {navItems.map((item) => {
+              const isActive = erpModule === item.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`erp-tab-${item.id}`}
+                  onClick={() => handleSelectModule(item.id)}
+                  title={isSidebarCollapsed ? item.label : undefined}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'lg:justify-center' : 'justify-between'} p-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer group ${
+                    isActive
+                      ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs font-bold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={isActive ? 'text-orange-500' : 'text-slate-400 group-hover:text-slate-700'}>
+                      {item.icon}
+                    </span>
+                    <span className={`truncate ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                      {item.label}
+                    </span>
+                  </div>
 
-        <div className="flex items-center gap-1.5 text-slate-700 font-semibold px-1">
-          <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-          <span className="truncate">{settings.name}</span>
+                  {item.badge !== undefined && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300 ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
-        <p className="text-[11px] text-slate-500 italic leading-snug px-1">
-          "{settings.slogan}"
-        </p>
 
-        {lowStockCount > 0 && (
-          <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2 text-orange-800 text-[11px]">
-            <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0" />
-            <span>{lowStockCount} produto(s) abaixo do estoque mínimo.</span>
+        {/* Bottom Store Slogan, User Profile & mini status */}
+        <div className={`p-3 border-t border-slate-100 bg-slate-50/80 space-y-2.5 text-xs ${isSidebarCollapsed ? 'lg:p-2' : ''}`}>
+          {currentUser && (
+            <div className={`p-2 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs gap-2 ${isSidebarCollapsed ? 'lg:p-1 lg:justify-center' : ''}`}>
+              <button
+                type="button"
+                onClick={() => setShowOperatorProfile(true)}
+                title="Clique para ver o perfil do operador"
+                className={`flex items-center gap-2 overflow-hidden text-left hover:bg-slate-50 p-1 rounded-lg transition-colors flex-1 cursor-pointer group ${isSidebarCollapsed ? 'lg:justify-center' : ''}`}
+              >
+                <div className="relative shrink-0">
+                  {currentUser.avatarUrl ? (
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.name}
+                      className="w-7 h-7 rounded-full object-cover border border-orange-500 ring-1 ring-orange-200"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="text-base">{currentUser.avatar || '👤'}</span>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white"></span>
+                </div>
+                <div className={`flex flex-col text-left overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                  <span className="font-bold text-slate-800 text-xs truncate group-hover:text-orange-600">
+                    {currentUser.name}
+                  </span>
+                  <span className="text-[10px] uppercase font-semibold text-orange-600 truncate">
+                    {currentUser.role === 'superadmin' ? '👑 Super Admin' : currentUser.role === 'admin' ? 'Administrador' : `Op. #${currentUser.operatorNumber || '02'}`}
+                  </span>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  logout();
+                }}
+                title="Sair do Sistema"
+                className={`px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg flex items-center justify-center transition-colors shrink-0 cursor-pointer ${isSidebarCollapsed ? 'lg:hidden' : ''}`}
+              >
+                <span className="text-[10px] font-bold uppercase leading-none">SAIR</span>
+              </button>
+            </div>
+          )}
+
+          <div className={`hidden lg:block ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <div className="flex items-center gap-1.5 text-slate-700 font-semibold px-1">
+              <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span className="truncate">{settings.name}</span>
+            </div>
+            <p className="text-[11px] text-slate-500 italic leading-snug px-1 truncate">
+              "{settings.slogan}"
+            </p>
           </div>
-        )}
-      </div>
 
-      {/* Operator Profile Modal in ERP Sidebar */}
-      <OperatorProfileModal
-        isOpen={showOperatorProfile}
-        onClose={() => setShowOperatorProfile(false)}
-      />
-    </aside>
+          {lowStockCount > 0 && !isSidebarCollapsed && (
+            <div className="p-2 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-2 text-orange-800 text-[11px]">
+              <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0" />
+              <span className="truncate">{lowStockCount} item(ns) em alerta.</span>
+            </div>
+          )}
+        </div>
+
+        {/* Operator Profile Modal in ERP Sidebar */}
+        <OperatorProfileModal
+          isOpen={showOperatorProfile}
+          onClose={() => setShowOperatorProfile(false)}
+        />
+      </aside>
+    </>
   );
 };
-
