@@ -19,7 +19,7 @@ export const ErpView: React.FC = () => {
   const { erpModule, setErpModule, setMobileSidebarOpen } = useApp();
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F8F9FF] h-[calc(100vh-58px)] relative">
+    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F8F9FF] h-full lg:h-[calc(100vh-58px)] relative">
       {/* Fixed/Responsive Left Navigation Sidebar */}
       <ErpSidebar />
 

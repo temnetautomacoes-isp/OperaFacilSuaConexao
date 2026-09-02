@@ -90,7 +90,7 @@ export const TopBar: React.FC = () => {
   const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
 
   return (
-    <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between border-b border-slate-800">
+    <header className="hidden lg:flex bg-slate-900 text-white shadow-md sticky top-0 z-40 px-4 py-2.5 items-center justify-between border-b border-slate-800">
       {/* Brand, Hamburger & Slogan */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Mobile Hamburger Menu Button (ERP) */}
