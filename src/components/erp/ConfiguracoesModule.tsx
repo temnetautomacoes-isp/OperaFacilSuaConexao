@@ -75,6 +75,7 @@ export const ConfiguracoesModule: React.FC = () => {
   
   // User Form fields
   const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<'admin' | 'operador'>('operador');
@@ -176,6 +177,7 @@ export const ConfiguracoesModule: React.FC = () => {
     if (userToEdit) {
       setEditingUser(userToEdit);
       setFormName(userToEdit.name);
+      setFormEmail(userToEdit.email || '');
       setFormUsername(userToEdit.username);
       setFormPassword(userToEdit.password || '');
       setFormRole(userToEdit.role === 'admin' ? 'admin' : 'operador');
@@ -196,8 +198,9 @@ export const ConfiguracoesModule: React.FC = () => {
     } else {
       setEditingUser(null);
       setFormName('');
+      setFormEmail('');
       setFormUsername('');
-      setFormPassword('123');
+      setFormPassword('123456');
       setFormRole('operador');
       setFormPhone('');
       setFormAvatarUrl('');
@@ -263,8 +266,14 @@ export const ConfiguracoesModule: React.FC = () => {
       return;
     }
 
-    if (!formPassword.trim()) {
-      alert('Por favor, defina uma senha de acesso.');
+    const cleanEmail = formEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      alert('Por favor, informe um e-mail válido para vincular ao Supabase Auth.');
+      return;
+    }
+
+    if (!formPassword.trim() || formPassword.trim().length < 6) {
+      alert('A senha de acesso deve conter pelo menos 6 caracteres.');
       return;
     }
 
@@ -280,6 +289,7 @@ export const ConfiguracoesModule: React.FC = () => {
     if (editingUser) {
       updateUser(editingUser.id, {
         name: formName.trim(),
+        email: cleanEmail,
         username: cleanUsername,
         password: formPassword.trim(),
         role: editingUser.role === 'superadmin' ? 'superadmin' : formRole,
@@ -290,6 +300,7 @@ export const ConfiguracoesModule: React.FC = () => {
     } else {
       addUser({
         name: formName.trim(),
+        email: cleanEmail,
         username: cleanUsername,
         password: formPassword.trim(),
         role: formRole,
@@ -801,6 +812,23 @@ export const ConfiguracoesModule: React.FC = () => {
                   />
                 </div>
 
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>E-mail de Acesso (Supabase Auth): *</span>
+                    <span className="text-[10px] text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      🛡️ Supabase Auth
+                    </span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="amanda@provedor.com"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:border-blue-500 text-slate-900"
+                  />
+                </div>
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Nome de Usuário (Login): *
@@ -816,14 +844,15 @@ export const ConfiguracoesModule: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Senha de Acesso: *
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Senha de Acesso: *</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Mín. 6 dígitos</span>
                   </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Senha do usuário"
+                      placeholder="Senha do usuário (mín. 6 dígitos)"
                       value={formPassword}
                       onChange={(e) => setFormPassword(e.target.value)}
                       className="w-full px-3 py-2 pr-9 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-900"

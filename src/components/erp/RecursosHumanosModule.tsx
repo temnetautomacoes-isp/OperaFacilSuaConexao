@@ -374,7 +374,15 @@ export const RecursosHumanosModule: React.FC = () => {
   const handleSaveNewUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userFormData.name || !userFormData.username) {
-      showNotification('Preencha o nome e o usuário de acesso.');
+      showNotification('Preencha o nome completo e o usuário de login.');
+      return;
+    }
+    if (!userFormData.email || !userFormData.email.includes('@')) {
+      showNotification('Informe um e-mail válido para vincular ao Supabase Auth.');
+      return;
+    }
+    if (!userFormData.password || userFormData.password.length < 6) {
+      showNotification('A senha para acesso ao Supabase Auth deve conter pelo menos 6 caracteres.');
       return;
     }
 
@@ -3159,9 +3167,26 @@ export const RecursosHumanosModule: React.FC = () => {
                     type="text"
                     required
                     placeholder="Ex: Roberto Ferreira"
-                    value={userFormData.name}
+                    value={userFormData.name || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>E-mail de Acesso *</span>
+                    <span className="text-[10px] text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      🛡️ Supabase Auth
+                    </span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="roberto@provedor.com"
+                    value={userFormData.email || ''}
+                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-blue-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -3171,18 +3196,22 @@ export const RecursosHumanosModule: React.FC = () => {
                     type="text"
                     required
                     placeholder="Ex: roberto.fibra"
-                    value={userFormData.username}
+                    value={userFormData.username || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Senha de Acesso</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Senha de Acesso *</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Mín. 6 dígitos</span>
+                  </label>
                   <input
                     type="password"
-                    placeholder="Senha"
-                    value={userFormData.password}
+                    required
+                    placeholder="Senha de acesso"
+                    value={userFormData.password || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
@@ -3197,7 +3226,7 @@ export const RecursosHumanosModule: React.FC = () => {
                     )}
                   </label>
                   <select
-                    value={userFormData.role}
+                    value={userFormData.role || 'operador'}
                     onChange={(e) => {
                       const newRole = e.target.value as any;
                       if (newRole === 'superadmin' && !isOriginalSuperAdmin) {
@@ -3219,7 +3248,7 @@ export const RecursosHumanosModule: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Divisão / Setor</label>
                   <select
-                    value={userFormData.department}
+                    value={userFormData.department || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   >
@@ -3234,7 +3263,7 @@ export const RecursosHumanosModule: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Ex: Técnico de Fusão e Instalação"
-                    value={userFormData.position}
+                    value={userFormData.position || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, position: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
@@ -3259,7 +3288,7 @@ export const RecursosHumanosModule: React.FC = () => {
                   <input
                     type="text"
                     placeholder="COL-010"
-                    value={userFormData.registrationCode}
+                    value={userFormData.registrationCode || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, registrationCode: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
@@ -3269,7 +3298,7 @@ export const RecursosHumanosModule: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Data de Admissão</label>
                   <input
                     type="date"
-                    value={userFormData.admissionDate}
+                    value={userFormData.admissionDate || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, admissionDate: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
@@ -3280,19 +3309,19 @@ export const RecursosHumanosModule: React.FC = () => {
                   <input
                     type="text"
                     placeholder="(11) 98765-4321"
-                    value={userFormData.phone}
+                    value={userFormData.phone || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">E-mail</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">CPF / Documento</label>
                   <input
-                    type="email"
-                    placeholder="colaborador@provedor.net"
-                    value={userFormData.email}
-                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                    type="text"
+                    placeholder="000.000.000-00"
+                    value={userFormData.cpf || ''}
+                    onChange={(e) => setUserFormData({ ...userFormData, cpf: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none"
                   />
                 </div>

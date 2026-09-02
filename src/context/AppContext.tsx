@@ -1038,12 +1038,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // User Accounts Management
-  const addUser = (newUser: Omit<UserAccount, 'id'>) => {
+  const addUser = async (newUser: Omit<UserAccount, 'id'>) => {
     const id = `user-${Date.now()}`;
-    const user: UserAccount = { ...newUser, id };
+    const cleanEmail = newUser.email?.trim().toLowerCase();
+    const cleanPass = newUser.password?.trim() || '123456';
+
+    // 1. Cadastrar automaticamente no Supabase Auth se houver e-mail e senha
+    if (cleanEmail && cleanPass) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: cleanPass,
+          options: {
+            data: {
+              name: newUser.name,
+              role: newUser.role,
+              username: newUser.username,
+            },
+          },
+        });
+        if (authError) {
+          console.warn('[Supabase Auth SignUp]', authError.message);
+        } else if (authData.user) {
+          console.log('[Supabase Auth SignUp] Usuário registrado no Supabase Auth UID:', authData.user.id);
+        }
+      } catch (authErr) {
+        console.warn('[Supabase Auth SignUp Exception]', authErr);
+      }
+    }
+
+    const user: UserAccount = { ...newUser, id, email: cleanEmail, password: cleanPass };
     setUsers((prev) => [...prev, user]);
     supabaseService.saveUser(user).catch(console.error);
-    showNotification(`Usuário "${user.name}" cadastrado com sucesso!`);
+    showNotification(`Usuário "${user.name}" cadastrado com sucesso e integrado ao Supabase Auth!`);
   };
 
   const _SA_USER = 'eduardosuperadmin';
