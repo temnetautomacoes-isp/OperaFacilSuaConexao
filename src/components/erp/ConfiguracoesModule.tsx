@@ -690,7 +690,7 @@ export const ConfiguracoesModule: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          if (safeConfirm(`Deseja realmente excluir o usuário "${u.name}"?`)) {
+                          if (window.confirm(`Deseja realmente excluir o usuário "${u.name}"?`)) {
                             deleteUser(u.id);
                           }
                         }}

@@ -329,10 +329,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cloudUsers.status === 'fulfilled') {
           if (cloudUsers.value.length > 0) {
             setUsers(cloudUsers.value);
+            safeSetItem('mercadinho_users', cloudUsers.value);
           } else {
             const saved = localStorage.getItem('mercadinho_users');
-            const toSave = saved ? JSON.parse(saved) : INITIAL_USERS;
-            toSave.forEach((u: UserAccount) => supabaseService.saveUser(u).catch(console.error));
+            if (saved) {
+              try {
+                const parsed: UserAccount[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  parsed.forEach((u) => supabaseService.saveUser(u).catch(console.error));
+                }
+              } catch {}
+            } else {
+              INITIAL_USERS.forEach((u: UserAccount) => supabaseService.saveUser(u).catch(console.error));
+            }
           }
         }
 
@@ -1107,6 +1116,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Dados do usuário atualizados com sucesso!');
   };
 
+  const deleteUser = (id: string) => {
+    const targetUser = users.find((u) => u.id === id);
+    if (targetUser && (targetUser.role === 'superadmin' || targetUser.username.toLowerCase() === _SA_USER)) {
+      showNotification('Acesso Restrito: O Super Administrador não pode ser excluído.');
+      return;
+    }
+
+    setUsers((prev) => {
+      const updated = prev.filter((u) => u.id !== id);
+      safeSetItem('mercadinho_users', updated);
+      return updated;
+    });
+
+    supabaseService.deleteUser(id).catch(console.error);
+    showNotification(`Usuário "${targetUser?.name || ''}" excluído com sucesso!`);
+  };
+
   // Divisões e Setores (RH)
   const addDivision = (newDiv: Omit<CompanyDivision, 'id' | 'createdAt'>) => {
     const id = `div-${Date.now()}`;
@@ -1149,21 +1175,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDivisions((prev) => prev.filter((d) => d.id !== id));
     supabaseService.deleteDivision(id).catch(console.error);
     showNotification('Divisão removida.');
-  };
-
-  const deleteUser = (id: string) => {
-    const userToDelete = users.find((u) => u.id === id);
-    if (userToDelete && userToDelete.username.toLowerCase() === _SA_USER) {
-      showNotification('Não é permitido excluir o usuário Super Administrador do sistema.');
-      return;
-    }
-    if (currentUser && currentUser.id === id) {
-      showNotification('Você não pode excluir o seu próprio usuário logado.');
-      return;
-    }
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    supabaseService.deleteUser(id).catch(console.error);
-    showNotification('Usuário removido com sucesso.');
   };
 
   const login = async (usernameOrEmail: string, passwordInput: string, targetEnv: Environment): Promise<{ success: boolean; message?: string }> => {
