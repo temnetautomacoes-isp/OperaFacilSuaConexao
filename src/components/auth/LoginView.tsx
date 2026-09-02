@@ -34,23 +34,26 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setErrorMessage('Informe seu usuário e senha para acessar.');
+      setErrorMessage('Informe seu e-mail ou usuário e senha para acessar.');
       return;
     }
 
     setErrorMessage(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = login(username, password, selectedEnv);
+    try {
+      const result = await login(username, password, selectedEnv);
       setIsLoading(false);
       if (!result.success && result.message) {
         setErrorMessage(result.message);
       }
-    }, 200);
+    } catch {
+      setIsLoading(false);
+      setErrorMessage('Ocorreu um erro ao validar seu acesso. Verifique suas credenciais.');
+    }
   };
 
   return (
@@ -209,7 +212,7 @@ export const LoginView: React.FC = () => {
               {/* Campo Usuário */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Login de Usuário:
+                  E-mail ou Login de Usuário:
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -224,7 +227,7 @@ export const LoginView: React.FC = () => {
                       setUsername(e.target.value);
                       setErrorMessage(null);
                     }}
-                    placeholder="Digite seu login"
+                    placeholder="seu-email@provedor.com ou usuário"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs transition-all"
                   />
                 </div>

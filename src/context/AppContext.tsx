@@ -44,7 +44,7 @@ interface AppContextType {
   addUser: (user: Omit<UserAccount, 'id'>) => void;
   updateUser: (id: string, updated: Partial<UserAccount>) => void;
   deleteUser: (id: string) => void;
-  login: (username: string, password: string, targetEnv: Environment) => { success: boolean; message?: string };
+  login: (username: string, password: string, targetEnv: Environment) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   environment: Environment;
   setEnvironment: (env: Environment) => void;
@@ -1139,26 +1139,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Usuário removido com sucesso.');
   };
 
-  const login = (username: string, password: string, targetEnv: Environment): { success: boolean; message?: string } => {
-    const trimmedUser = username.trim().toLowerCase();
-    const trimmedPass = password.trim();
-    
-    // 1. Priority: Exact username match
-    let matchedUser = users.find(
-      (u) => u.username.toLowerCase() === trimmedUser
-    );
+  const login = async (usernameOrEmail: string, passwordInput: string, targetEnv: Environment): Promise<{ success: boolean; message?: string }> => {
+    const rawInput = usernameOrEmail.trim();
+    const cleanUser = rawInput.toLowerCase();
+    const cleanPass = passwordInput.trim();
 
-    // 2. Secondary Priority: Exact full name match
-    if (!matchedUser) {
-      matchedUser = users.find(
-        (u) => u.name.toLowerCase() === trimmedUser
-      );
+    if (!rawInput || !cleanPass) {
+      return { success: false, message: 'Informe seu e-mail ou usuário e senha para acessar.' };
     }
+
+    // 1. TENTATIVA COM SUPABASE AUTH OFICIAL (NUVEM)
+    let emailToTry = cleanUser;
+    if (!cleanUser.includes('@')) {
+      const foundInAppUsers = users.find(
+        (u) => u.username?.toLowerCase() === cleanUser || u.name?.toLowerCase() === cleanUser
+      );
+      if (foundInAppUsers?.email) {
+        emailToTry = foundInAppUsers.email.toLowerCase();
+      }
+    }
+
+    if (emailToTry.includes('@')) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: emailToTry,
+          password: cleanPass,
+        });
+
+        if (!authError && authData.user) {
+          const authEmail = authData.user.email?.toLowerCase() || emailToTry;
+          let userProfile = users.find(
+            (u) => u.email?.toLowerCase() === authEmail || u.id === authData.user.id
+          );
+
+          if (!userProfile) {
+            const isSuper = users.length <= 1 || authEmail.includes('admin') || authEmail.includes('eduardo');
+            userProfile = {
+              id: authData.user.id,
+              name: authData.user.user_metadata?.name || authData.user.user_metadata?.full_name || authEmail.split('@')[0],
+              username: authEmail.split('@')[0],
+              email: authEmail,
+              password: cleanPass,
+              role: isSuper ? 'superadmin' : 'operador',
+              operatorNumber: '01',
+              avatar: isSuper ? '👑' : '👤',
+            };
+            supabaseService.saveUser(userProfile).catch(console.error);
+            setUsers((prev) => [userProfile!, ...prev]);
+          }
+
+          if (targetEnv === 'erp' && userProfile.role !== 'admin' && userProfile.role !== 'superadmin') {
+            return {
+              success: false,
+              message: 'Acesso Restrito: Seu perfil de colaborador não possui permissão para acessar o Painel da Gerência (ERP). Acesse como Colaborador ou solicite ao administrador.',
+            };
+          }
+
+          setCurrentUser(userProfile);
+          setEnvironment(targetEnv);
+
+          if (targetEnv === 'pdv') {
+            setCashRegister({
+              isOpen: true,
+              openedAt: new Date().toISOString(),
+              operator: userProfile.name,
+              initialAmount: cashRegister.isOpen ? cashRegister.initialAmount : 100.0,
+              movements: cashRegister.isOpen ? cashRegister.movements : [],
+            });
+          }
+
+          showNotification(`Autenticado com sucesso via Supabase Auth! Bem-vindo(a), ${userProfile.name}.`);
+          return { success: true };
+        }
+      } catch (cloudAuthErr) {
+        console.warn('[Supabase Auth] Erro ao autenticar:', cloudAuthErr);
+      }
+    }
+
+    // 2. TENTATIVA DE BACKUP COM USUÁRIOS DO SISTEMA / MASTER SUPERADMIN
+    let matchedUser = users.find(
+      (u) => u.username?.toLowerCase() === cleanUser || u.email?.toLowerCase() === cleanUser || u.name?.toLowerCase() === cleanUser
+    );
 
     let userToAuth = matchedUser;
 
     if (!userToAuth) {
-      if (trimmedUser === _SA_USER) {
+      if (cleanUser === _SA_USER) {
         userToAuth = {
           id: _d('dXNlci1zdXBlcmFkbWlu'),
           name: _d('RWR1YXJkbyAoU3VwZXIgQWRtaW5pc3RyYWRvcik='),
@@ -1170,51 +1236,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
           phone: '(11) 99999-8888',
         };
-      } else if (trimmedUser === 'admin' || trimmedUser === 'gerente') {
-        userToAuth = {
-          id: 'user-admin',
-          name: 'Carlos Silva (Gerente Geral)',
-          username: 'admin',
-          password: '123',
-          role: 'admin',
-          operatorNumber: '01',
-          avatar: '👨‍💼',
-        };
-      } else if (trimmedUser.includes('caixa') || trimmedUser.includes('operador') || trimmedUser.length > 0) {
-        userToAuth = {
-          id: `user-${Date.now()}`,
-          name: username.trim(),
-          username: trimmedUser,
-          password: '123',
-          role: 'operador',
-          operatorNumber: '02',
-          avatar: '👩‍💼',
-        };
       } else {
-        return { success: false, message: 'Por favor, informe um usuário ou selecione um perfil.' };
+        return { 
+          success: false, 
+          message: 'Usuário não encontrado no Supabase Auth ou no cadastro. Verifique seu e-mail/usuário ou crie sua conta no Supabase.' 
+        };
       }
     }
 
-    // Password validation
-    if (userToAuth.password && trimmedPass !== userToAuth.password) {
+    // Validação de senha
+    if (userToAuth.password && cleanPass !== userToAuth.password) {
       return { 
         success: false, 
         message: 'Senha incorreta para o usuário informado. Por favor, verifique e tente novamente.' 
       };
     }
 
-    // Role security check for ERP (superadmin and admin have access, operators are restricted)
+    // Checagem de acesso para ERP
     if (targetEnv === 'erp' && userToAuth.role !== 'admin' && userToAuth.role !== 'superadmin') {
       return { 
         success: false, 
-        message: 'Acesso Restrito: O perfil selecionado ("Operador") não possui permissão para acessar o Painel da Gerência (ERP). Faça login como Administrador/Super Admin ou acesse o Caixa (PDV).' 
+        message: 'Acesso Restrito: O perfil selecionado ("Operador") não possui permissão para acessar o Painel da Gerência (ERP).' 
       };
     }
 
     setCurrentUser(userToAuth);
     setEnvironment(targetEnv);
 
-    // If operator entered PDV, automatically open the cash register for this operator
     if (targetEnv === 'pdv') {
       setCashRegister({
         isOpen: true,
@@ -1232,7 +1280,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = () => {
-    // Automatically close cash register if open
+    supabase.auth.signOut().catch(console.error);
     if (cashRegister.isOpen) {
       setCashRegister((prev) => ({
         ...prev,
@@ -1243,7 +1291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
     const operatorName = currentUser?.name || cashRegister.operator || 'Operador';
     setCurrentUser(null);
-    showNotification(`Caixa de ${operatorName} fechado e operador deslogado com sucesso.`);
+    showNotification(`Sessão de ${operatorName} encerrada com sucesso.`);
   };
 
   const resetAllData = () => {
