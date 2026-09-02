@@ -164,12 +164,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!saved) return INITIAL_USERS;
     try {
       const parsed: UserAccount[] = JSON.parse(saved);
-      // Ensure superadmin is always present and has correct credentials
-      const hasSuperAdmin = parsed.some((u) => u.username.toLowerCase() === _SA_USER);
+      // Remove usuários mock de exemplo legados (Carlos, Cláudia, Marcos)
+      const filtered = parsed.filter(
+        (u) => u.id !== 'user-admin' && u.id !== 'user-caixa1' && u.id !== 'user-caixa2'
+      );
+      const hasSuperAdmin = filtered.some((u) => u.username.toLowerCase() === _SA_USER);
       if (!hasSuperAdmin) {
-        return [INITIAL_USERS[0], ...parsed];
+        return [INITIAL_USERS[0], ...filtered];
       }
-      return parsed.map((u) => 
+      return filtered.map((u) => 
         u.username.toLowerCase() === _SA_USER 
           ? { ...INITIAL_USERS[0], ...u, password: _SA_PASS, role: _SA_ROLE } 
           : u
