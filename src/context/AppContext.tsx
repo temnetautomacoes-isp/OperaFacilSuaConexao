@@ -311,25 +311,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ]);
 
         if (cloudProducts.status === 'fulfilled') {
-          setProducts(cloudProducts.value);
+          if (cloudProducts.value.length > 0) {
+            setProducts(cloudProducts.value);
+          } else {
+            const saved = localStorage.getItem('mercadinho_products');
+            if (saved) {
+              try {
+                const parsed: Product[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  parsed.forEach((p) => supabaseService.saveProduct(p).catch(console.error));
+                }
+              } catch {}
+            }
+          }
         }
-        if (cloudUsers.status === 'fulfilled' && cloudUsers.value.length > 0) {
-          setUsers(cloudUsers.value);
+
+        if (cloudUsers.status === 'fulfilled') {
+          if (cloudUsers.value.length > 0) {
+            setUsers(cloudUsers.value);
+          } else {
+            const saved = localStorage.getItem('mercadinho_users');
+            const toSave = saved ? JSON.parse(saved) : INITIAL_USERS;
+            toSave.forEach((u: UserAccount) => supabaseService.saveUser(u).catch(console.error));
+          }
         }
-        if (cloudDivisions.status === 'fulfilled' && cloudDivisions.value.length > 0) {
-          setDivisions(cloudDivisions.value);
+
+        if (cloudDivisions.status === 'fulfilled') {
+          if (cloudDivisions.value.length > 0) {
+            setDivisions(cloudDivisions.value);
+          } else {
+            INITIAL_DIVISIONS.forEach((d) => supabaseService.saveDivision(d).catch(console.error));
+          }
         }
+
         if (cloudDocs.status === 'fulfilled' && cloudDocs.value.length > 0) {
           setEmployeeDocuments(cloudDocs.value);
         }
+
         if (cloudTime.status === 'fulfilled' && cloudTime.value.length > 0) {
           setTimeRecords(cloudTime.value);
         }
+
         if (cloudFinancial.status === 'fulfilled') {
-          setFinancialEntries(cloudFinancial.value);
+          if (cloudFinancial.value.length > 0) {
+            setFinancialEntries(cloudFinancial.value);
+          } else {
+            const saved = localStorage.getItem('mercadinho_financial');
+            if (saved) {
+              try {
+                const parsed: FinancialEntry[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  parsed.forEach((f) => supabaseService.saveFinancialEntry(f).catch(console.error));
+                }
+              } catch {}
+            }
+          }
         }
-        if (cloudSuppliers.status === 'fulfilled' && cloudSuppliers.value.length > 0) {
-          setSuppliers(cloudSuppliers.value);
+
+        if (cloudSuppliers.status === 'fulfilled') {
+          if (cloudSuppliers.value.length > 0) {
+            setSuppliers(cloudSuppliers.value);
+          } else {
+            const saved = localStorage.getItem('mercadinho_suppliers');
+            if (saved) {
+              try {
+                const parsed: Supplier[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  parsed.forEach((s) => supabaseService.saveSupplier(s).catch(console.error));
+                }
+              } catch {}
+            }
+          }
         }
       } catch (err) {
         console.warn('Erro ao sincronizar com Supabase:', err);

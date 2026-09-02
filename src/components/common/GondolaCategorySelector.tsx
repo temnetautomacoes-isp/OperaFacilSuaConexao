@@ -182,27 +182,32 @@ export const GondolaCategorySelector: React.FC<GondolaCategorySelectorProps> = (
 
   const handleSaveForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formLabel.trim()) return;
+    const cleanLabel = formLabel.trim();
+    if (!cleanLabel) return;
 
-    const catKey = formCategory.trim() || formLabel.trim();
+    const catKey = cleanLabel;
 
     if (editingItemIndex === -1) {
       // Add new
       const newItem: GondolaCategoryItem = {
         category: catKey,
-        label: formLabel.trim(),
+        label: cleanLabel,
         aisle: formAisle.trim() || `Corredor ${String(categories.length).padStart(2, '0')}`,
         icon: formIcon || '📦',
       };
       saveCategories([...categories, newItem]);
     } else if (editingItemIndex !== null && editingItemIndex >= 0) {
       // Update existing
+      const oldItem = categories[editingItemIndex];
+      const oldCatKey = oldItem.category;
+      const targetCatKey = editingItemIndex === 0 ? 'Todas' : catKey;
+
       const updated = categories.map((c, i) => {
         if (i === editingItemIndex) {
           return {
             ...c,
-            category: i === 0 ? 'Todas' : catKey,
-            label: formLabel.trim(),
+            category: targetCatKey,
+            label: cleanLabel,
             aisle: formAisle.trim() || c.aisle,
             icon: formIcon || c.icon,
           };
@@ -210,6 +215,15 @@ export const GondolaCategorySelector: React.FC<GondolaCategorySelectorProps> = (
         return c;
       });
       saveCategories(updated);
+
+      // If category key renamed, dispatch event to update products
+      if (oldCatKey !== targetCatKey && oldCatKey !== 'Todas') {
+        window.dispatchEvent(
+          new CustomEvent('gondola_category_renamed', {
+            detail: { oldKey: oldCatKey, newKey: targetCatKey },
+          })
+        );
+      }
     }
 
     setIsEditModalOpen(false);

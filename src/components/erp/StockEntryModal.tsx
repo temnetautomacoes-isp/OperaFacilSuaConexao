@@ -53,6 +53,7 @@ export const StockEntryModal: React.FC<StockEntryModalProps> = ({
   const [salePrice, setSalePrice] = useState<string>('');
   const [updatePrices, setUpdatePrices] = useState<boolean>(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [customSupplierName, setCustomSupplierName] = useState<string>('');
   const [invoiceReference, setInvoiceReference] = useState<string>('');
   const [entryManufacturingDate, setEntryManufacturingDate] = useState<string>('');
   const [entryExpirationDate, setEntryExpirationDate] = useState<string>('');
@@ -98,6 +99,8 @@ export const StockEntryModal: React.FC<StockEntryModalProps> = ({
     setSearchTerm('');
     setCostPrice(prod.costPrice.toFixed(2));
     setSalePrice(prod.salePrice.toFixed(2));
+    setSelectedSupplierId(prod.supplierId || '');
+    setCustomSupplierName(prod.supplierName || '');
     setEntryManufacturingDate(prod.manufacturingDate || '');
     setEntryExpirationDate(prod.expirationDate || '');
     setEntryBatchNumber(prod.batchNumber || '');
@@ -144,13 +147,15 @@ export const StockEntryModal: React.FC<StockEntryModalProps> = ({
       showNotification('Selecione um produto cadastrado para lançar a entrada.');
       return;
     }
-
     if (numericQty <= 0) {
       showNotification('Informe uma quantidade de entrada válida maior que zero.');
       return;
     }
 
-    const supplierName = suppliers.find((s) => s.id === selectedSupplierId)?.name || selectedProduct.supplierName;
+    const matchedSup = suppliers.find((s) => s.id === selectedSupplierId);
+    const supplierName = selectedSupplierId
+      ? (matchedSup?.tradeName || matchedSup?.name)
+      : (customSupplierName.trim() || selectedProduct.supplierName);
 
     // 1. Add specific batch to product (automatically handles stock aggregation and FEFO tracking)
     addBatchToProduct(selectedProduct.id, {
@@ -173,7 +178,6 @@ export const StockEntryModal: React.FC<StockEntryModalProps> = ({
 
     // 3. Register financial expense if requested
     if (registerFinancialExpense && totalCostAmount > 0) {
-      const supplierName = suppliers.find((s) => s.id === selectedSupplierId)?.name;
       addFinancialEntry({
         type: 'despesa',
         category: 'Estoque / Reposição de Mercadorias',
@@ -517,23 +521,39 @@ export const StockEntryModal: React.FC<StockEntryModalProps> = ({
                 {/* Additional Metadata: Supplier & Invoice / Financial */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Supplier */}
-                  <div>
+                  <div className="space-y-1.5">
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       Fornecedor (Opcional):
                     </label>
                     <select
                       value={selectedSupplierId}
-                      onChange={(e) => setSelectedSupplierId(e.target.value)}
+                      onChange={(e) => {
+                        const chosenId = e.target.value;
+                        setSelectedSupplierId(chosenId);
+                        const sup = suppliers.find((s) => s.id === chosenId);
+                        if (sup) {
+                          setCustomSupplierName(sup.tradeName || sup.name);
+                        }
+                      }}
                       className="w-full py-1.5 px-2.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-orange-500"
                     >
-                      <option value="">Não informado / Diversos</option>
+                      <option value="">🚚 Fornecedor Avulso / Não cadastrado</option>
                       {suppliers.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} ({s.category})
+                          🏢 {s.tradeName || s.name} ({s.category})
                         </option>
                       ))}
                     </select>
+                    {!selectedSupplierId && (
+                      <input
+                        type="text"
+                        placeholder="Nome do fornecedor avulso..."
+                        value={customSupplierName}
+                        onChange={(e) => setCustomSupplierName(e.target.value)}
+                        className="w-full py-1.5 px-2.5 bg-white border border-orange-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-orange-500 placeholder:text-slate-400"
+                      />
+                    )}
                   </div>
 
                   {/* Invoice / Reference */}

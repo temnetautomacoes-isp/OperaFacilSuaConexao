@@ -53,21 +53,36 @@ export const EstoqueModule: React.FC = () => {
   const [filterStockStatus, setFilterStockStatus] = useState<'all' | 'low_critical' | 'low' | 'out'>('all');
 
   // Dynamic Category List from Gondola
-  const [categoriesList, setCategoriesList] = useState<string[]>(() => {
-    return getSavedGondolaCategories().map(c => c.category);
-  });
+  const [gondolaCategories, setGondolaCategories] = useState(() => getSavedGondolaCategories());
+  const categoriesList = useMemo(() => {
+    return gondolaCategories.map((c) => c.category);
+  }, [gondolaCategories]);
 
   useEffect(() => {
     const handleSync = () => {
-      setCategoriesList(getSavedGondolaCategories().map(c => c.category));
+      setGondolaCategories(getSavedGondolaCategories());
     };
+    const handleCategoryRenamed = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && detail.oldKey && detail.newKey) {
+        products.forEach((p) => {
+          if (p.category === detail.oldKey) {
+            updateProduct(p.id, { category: detail.newKey });
+          }
+        });
+      }
+      handleSync();
+    };
+
     window.addEventListener('gondola_categories_updated', handleSync);
+    window.addEventListener('gondola_category_renamed', handleCategoryRenamed);
     window.addEventListener('storage', handleSync);
     return () => {
       window.removeEventListener('gondola_categories_updated', handleSync);
+      window.removeEventListener('gondola_category_renamed', handleCategoryRenamed);
       window.removeEventListener('storage', handleSync);
     };
-  }, []);
+  }, [products, updateProduct]);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -94,10 +109,39 @@ export const EstoqueModule: React.FC = () => {
   const [formIcon, setFormIcon] = useState('📦');
   const [formImageUrl, setFormImageUrl] = useState<string>('');
   const [formSupplierId, setFormSupplierId] = useState<string>('');
+  const [formSupplierName, setFormSupplierName] = useState<string>('');
   const [formManufacturingDate, setFormManufacturingDate] = useState<string>('');
   const [formExpirationDate, setFormExpirationDate] = useState<string>('');
   const [formBatchNumber, setFormBatchNumber] = useState<string>('');
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+
+  // List of active selectable category options (from gondola + products)
+  const categoryOptions = useMemo(() => {
+    const fromGondola = gondolaCategories.filter((c) => c.category !== 'Todas');
+    const existingKeys = new Set(fromGondola.map((c) => c.category.toLowerCase()));
+    
+    const extraCategories: { category: string; label: string; icon: string }[] = [];
+    products.forEach((p) => {
+      if (p.category && !existingKeys.has(p.category.toLowerCase())) {
+        existingKeys.add(p.category.toLowerCase());
+        extraCategories.push({
+          category: p.category,
+          label: p.category,
+          icon: p.icon || '📦',
+        });
+      }
+    });
+
+    if (formCategory && !existingKeys.has(formCategory.toLowerCase())) {
+      extraCategories.push({
+        category: formCategory,
+        label: formCategory,
+        icon: '📦',
+      });
+    }
+
+    return [...fromGondola, ...extraCategories];
+  }, [gondolaCategories, products, formCategory]);
 
   // Stock alert counts
   const lowStockCount = useMemo(
@@ -151,10 +195,14 @@ export const EstoqueModule: React.FC = () => {
   }, [products, categoriesList]);
 
   const handleOpenAddModal = () => {
+    const latestGondola = getSavedGondolaCategories();
+    setGondolaCategories(latestGondola);
+    const defaultCat = latestGondola.find((c) => c.category !== 'Todas')?.category || 'Mercearia';
+
     setEditingProductId(null);
     setFormBarcode(`789${Math.floor(1000000000 + Math.random() * 9000000000)}`);
     setFormName('');
-    setFormCategory('Mercearia');
+    setFormCategory(defaultCat);
     setFormUnit('un');
     setFormCostPrice('');
     setFormSalePrice('');
@@ -163,6 +211,7 @@ export const EstoqueModule: React.FC = () => {
     setFormIcon('📦');
     setFormImageUrl('');
     setFormSupplierId('');
+    setFormSupplierName('');
     setFormManufacturingDate('');
     setFormExpirationDate('');
     setFormBatchNumber('');
@@ -173,6 +222,9 @@ export const EstoqueModule: React.FC = () => {
   };
 
   const handleOpenEditModal = (p: Product) => {
+    const latestGondola = getSavedGondolaCategories();
+    setGondolaCategories(latestGondola);
+
     setEditingProductId(p.id);
     setFormBarcode(p.barcode);
     setFormName(p.name);
@@ -185,6 +237,7 @@ export const EstoqueModule: React.FC = () => {
     setFormIcon(p.icon || '📦');
     setFormImageUrl(p.imageUrl || '');
     setFormSupplierId(p.supplierId || '');
+    setFormSupplierName(p.supplierName || '');
     setFormManufacturingDate(p.manufacturingDate || '');
     setFormExpirationDate(p.expirationDate || '');
     setFormBatchNumber(p.batchNumber || '');
@@ -250,7 +303,9 @@ export const EstoqueModule: React.FC = () => {
     }
 
     const selectedSup = suppliers.find((s) => s.id === formSupplierId);
-    const supName = selectedSup ? (selectedSup.tradeName || selectedSup.name) : undefined;
+    const finalSupplierName = formSupplierId
+      ? (selectedSup ? (selectedSup.tradeName || selectedSup.name) : undefined)
+      : (formSupplierName.trim() || undefined);
 
     if (editingProductId) {
       updateProduct(editingProductId, {
@@ -265,7 +320,7 @@ export const EstoqueModule: React.FC = () => {
         icon: formIcon,
         imageUrl: formImageUrl.trim() || undefined,
         supplierId: formSupplierId || undefined,
-        supplierName: supName,
+        supplierName: finalSupplierName,
         manufacturingDate: formManufacturingDate || undefined,
         expirationDate: formExpirationDate || undefined,
         batchNumber: formBatchNumber.trim() || undefined,
@@ -283,7 +338,7 @@ export const EstoqueModule: React.FC = () => {
         icon: formIcon,
         imageUrl: formImageUrl.trim() || undefined,
         supplierId: formSupplierId || undefined,
-        supplierName: supName,
+        supplierName: finalSupplierName,
         manufacturingDate: formManufacturingDate || undefined,
         expirationDate: formExpirationDate || undefined,
         batchNumber: formBatchNumber.trim() || undefined,
@@ -798,17 +853,20 @@ export const EstoqueModule: React.FC = () => {
               {/* Category & Unit */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Categoria:
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Categoria:
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">Gôndola / Seções</span>
+                  </div>
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as ProductCategory)}
-                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium text-slate-800"
                   >
-                    {categoriesList.filter((c) => c !== 'Todas').map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {categoryOptions.map((c) => (
+                      <option key={c.category} value={c.category}>
+                        {c.icon ? `${c.icon} ` : ''}{c.label || c.category}
                       </option>
                     ))}
                   </select>
@@ -821,7 +879,7 @@ export const EstoqueModule: React.FC = () => {
                   <select
                     value={formUnit}
                     onChange={(e) => setFormUnit(e.target.value as ProductUnit)}
-                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium text-slate-800"
                   >
                     <option value="un">Unidade (un)</option>
                     <option value="kg">Quilo (kg)</option>
@@ -834,13 +892,13 @@ export const EstoqueModule: React.FC = () => {
               </div>
 
               {/* Fornecedor Selector */}
-              <div>
+              <div className="space-y-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Truck className="w-3.5 h-3.5 text-orange-500" />
                     Fornecedor do Produto:
                   </label>
-                  <span className="text-[10px] text-slate-400 font-medium">Puxado dos Fornecedores cadastrados</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Cadastrado ou Avulso</span>
                 </div>
                 <select
                   value={formSupplierId}
@@ -848,43 +906,72 @@ export const EstoqueModule: React.FC = () => {
                     const chosenId = e.target.value;
                     setFormSupplierId(chosenId);
                     const chosenSup = suppliers.find((s) => s.id === chosenId);
-                    if (chosenSup && chosenSup.category) {
-                      const matchedCat = categoriesList.find(
-                        (c) => c.toLowerCase() === chosenSup.category.toLowerCase() ||
-                               chosenSup.category.toLowerCase().includes(c.toLowerCase())
-                      );
-                      if (matchedCat && matchedCat !== 'Todas') {
-                        setFormCategory(matchedCat as ProductCategory);
+                    if (chosenSup) {
+                      setFormSupplierName(chosenSup.tradeName || chosenSup.name);
+                      if (chosenSup.category) {
+                        const matchedCat = categoryOptions.find(
+                          (c) =>
+                            c.category.toLowerCase() === chosenSup.category.toLowerCase() ||
+                            chosenSup.category.toLowerCase().includes(c.category.toLowerCase()) ||
+                            c.label.toLowerCase().includes(chosenSup.category.toLowerCase())
+                        );
+                        if (matchedCat) {
+                          setFormCategory(matchedCat.category as ProductCategory);
+                        }
                       }
                     }
                   }}
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium text-slate-800"
                 >
-                  <option value="">Nenhum Fornecedor Vinculado (Geral / Avulso)</option>
-                  {suppliers.map((sup) => (
-                    <option key={sup.id} value={sup.id}>
-                      {sup.tradeName || sup.name} ({sup.category}) {sup.cnpj ? `- CNPJ: ${sup.cnpj}` : ''}
-                    </option>
-                  ))}
+                  <option value="">🚚 Fornecedor Avulso / Não Cadastrado (Digitar Manualmente)</option>
+                  {suppliers.length > 0 && (
+                    <optgroup label="── Fornecedores Cadastrados ──">
+                      {suppliers.map((sup) => (
+                        <option key={sup.id} value={sup.id}>
+                          🏢 {sup.tradeName || sup.name} ({sup.category}) {sup.cnpj ? `- CNPJ: ${sup.cnpj}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
 
-                {/* Selected Supplier Micro-Card */}
-                {formSupplierId && (() => {
-                  const s = suppliers.find((sup) => sup.id === formSupplierId);
-                  if (!s) return null;
-                  return (
-                    <div className="mt-1.5 p-2 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] animate-in fade-in duration-150">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                        <span className="font-bold text-slate-800">{s.tradeName || s.name}</span>
-                        {s.phone && <span className="text-slate-500">&bull; Tel: {s.phone}</span>}
+                {/* If Avulso (formSupplierId is empty), allow user to write the supplier name */}
+                {!formSupplierId ? (
+                  <div className="p-2.5 bg-orange-50/70 rounded-xl border border-orange-200/90 animate-in fade-in duration-150 space-y-1">
+                    <label className="block text-[11px] font-bold text-orange-950 flex items-center justify-between">
+                      <span>Nome do Fornecedor Avulso (Opcional):</span>
+                      <span className="text-[10px] font-normal text-orange-800">Escrita Livre</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Distribuidora Silva, Produtor Local, Zé do Queijo..."
+                      value={formSupplierName}
+                      onChange={(e) => setFormSupplierName(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-orange-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-900 placeholder:text-slate-400"
+                    />
+                    <p className="text-[10px] text-orange-900 leading-tight">
+                      💡 O nome digitado será salvo junto ao produto e exibido nas consultas e relatórios.
+                    </p>
+                  </div>
+                ) : (
+                  /* Selected Supplier Micro-Card */
+                  (() => {
+                    const s = suppliers.find((sup) => sup.id === formSupplierId);
+                    if (!s) return null;
+                    return (
+                      <div className="mt-1.5 p-2 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] animate-in fade-in duration-150">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                          <span className="font-bold text-slate-800">{s.tradeName || s.name}</span>
+                          {s.phone && <span className="text-slate-500">&bull; Tel: {s.phone}</span>}
+                        </div>
+                        <span className="text-[10px] font-extrabold bg-white text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">
+                          {s.category}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-extrabold bg-white text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">
-                        {s.category}
-                      </span>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()
+                )}
               </div>
 
               {/* Pricing & Profit Margin */}
