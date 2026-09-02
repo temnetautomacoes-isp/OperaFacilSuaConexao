@@ -153,9 +153,26 @@ const _SA_USER = _d('ZWR1YXJkb3N1cGVyYWRtaW4=');
 const _SA_PASS = _d('ODc5NDgzODQ=');
 const _SA_ROLE = _d('c3VwZXJhZG1pbg==') as 'superadmin';
 
+// Tempo limite de inatividade: 5 minutos
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    // Keep null initially so entry screen is always presented first, or check sessionStorage
+    try {
+      const savedUser = localStorage.getItem('operafacil_current_user');
+      const lastActivity = localStorage.getItem('operafacil_last_activity');
+      if (savedUser && lastActivity) {
+        const elapsed = Date.now() - Number(lastActivity);
+        if (elapsed < INACTIVITY_TIMEOUT_MS) {
+          localStorage.setItem('operafacil_last_activity', String(Date.now()));
+          return JSON.parse(savedUser);
+        } else {
+          localStorage.removeItem('operafacil_current_user');
+          localStorage.removeItem('operafacil_last_activity');
+          localStorage.removeItem('operafacil_environment');
+        }
+      }
+    } catch {}
     return null;
   });
 
@@ -182,7 +199,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [environment, setEnvironment] = useState<Environment>('pdv');
+  const [environment, setEnvironment] = useState<Environment>(() => {
+    try {
+      const savedEnv = localStorage.getItem('operafacil_environment') as Environment;
+      if (savedEnv && ['colaborador', 'erp', 'pdv'].includes(savedEnv)) {
+        return savedEnv;
+      }
+    } catch {}
+    return 'pdv';
+  });
   const [erpModule, setErpModule] = useState<ErpModule>('dashboard');
 
   // Load from LocalStorage or use defaults
@@ -495,6 +520,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     safeSetItem('mercadinho_product_losses', productLosses);
   }, [productLosses]);
+
+  // Sincronizar sessão ativa do usuário
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('operafacil_current_user', JSON.stringify(currentUser));
+      localStorage.setItem('operafacil_last_activity', String(Date.now()));
+    } else {
+      localStorage.removeItem('operafacil_current_user');
+      localStorage.removeItem('operafacil_last_activity');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('operafacil_environment', environment);
+  }, [environment]);
+
+  // -------------------------------------------------------------
+  // MONITOR DE INATIVIDADE (LOGOUT AUTOMÁTICO APÓS 5 MINUTOS)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetInactivityTimer = () => {
+      const now = Date.now();
+      localStorage.setItem('operafacil_last_activity', String(now));
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        logout();
+        showNotification('Sessão expirada após 5 minutos de inatividade.');
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // Iniciar temporizador no login/carregamento
+    resetInactivityTimer();
+
+    // Eventos de atividade do usuário
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    
+    let lastActivityTimestamp = Date.now();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      // Throttle para não sobrecarregar localStorage a cada pixel de movimento
+      if (now - lastActivityTimestamp > 2000) {
+        lastActivityTimestamp = now;
+        resetInactivityTimer();
+      }
+    };
+
+    activityEvents.forEach((ev) => window.addEventListener(ev, handleUserActivity, { passive: true }));
+
+    // Verificação periódica a cada 5 segundos (útil caso a aba fique em segundo plano)
+    const backgroundCheckInterval = setInterval(() => {
+      const lastAct = localStorage.getItem('operafacil_last_activity');
+      if (lastAct) {
+        const elapsed = Date.now() - Number(lastAct);
+        if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+          logout();
+          showNotification('Sessão expirada após 5 minutos de inatividade.');
+        }
+      }
+    }, 5000);
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      clearInterval(backgroundCheckInterval);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, handleUserActivity));
+    };
+  }, [currentUser]);
 
   const showNotification = (msg: string) => {
     setActiveNotification(msg);
@@ -1322,6 +1417,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     supabase.auth.signOut().catch(console.error);
+    localStorage.removeItem('operafacil_current_user');
+    localStorage.removeItem('operafacil_last_activity');
     if (cashRegister.isOpen) {
       setCashRegister((prev) => ({
         ...prev,
