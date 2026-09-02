@@ -1,0 +1,6 @@
+{
+  "name": "Mercadinho Familiar",
+  "description": "Sistema ERP e PDV completo para comércio local com gestão de estoque, vendas, fluxo de caixa e frente de caixa ágil.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
