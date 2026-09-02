@@ -63,6 +63,32 @@ export const supabaseService = {
     }
   },
   // -------------------------------------------------------------
+  // COMPANY INFO / SETTINGS
+  // -------------------------------------------------------------
+  async fetchCompanySettings(): Promise<Partial<StoreSettings> | null> {
+    const { data, error } = await supabase.from('company_info').select('*').limit(1).maybeSingle();
+    if (error || !data) return null;
+    return {
+      name: data.name || undefined,
+      slogan: data.tagline || undefined,
+      cnpj: data.cnpj || undefined,
+      phone: data.phone || undefined,
+      logoUrl: data.logo_url || undefined,
+    };
+  },
+
+  async saveCompanySettings(settings: Partial<StoreSettings>): Promise<void> {
+    await supabase.from('company_info').upsert({
+      id: 'default',
+      name: settings.name,
+      tagline: settings.slogan,
+      cnpj: settings.cnpj,
+      phone: settings.phone,
+      logo_url: settings.logoUrl || null,
+    });
+  },
+
+  // -------------------------------------------------------------
   // PRODUCTS
   // -------------------------------------------------------------
   async fetchProducts(): Promise<Product[]> {

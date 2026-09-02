@@ -328,7 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     async function loadCloudData() {
       try {
-        const [cloudProducts, cloudUsers, cloudDivisions, cloudDocs, cloudTime, cloudFinancial, cloudSuppliers, cloudCategories] = await Promise.allSettled([
+        const [cloudProducts, cloudUsers, cloudDivisions, cloudDocs, cloudTime, cloudFinancial, cloudSuppliers, cloudCategories, cloudCompany] = await Promise.allSettled([
           supabaseService.fetchProducts(),
           supabaseService.fetchUsers(),
           supabaseService.fetchDivisions(),
@@ -337,7 +337,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabaseService.fetchFinancialEntries(),
           supabaseService.fetchSuppliers(),
           supabaseService.fetchGondolaCategories(),
+          supabaseService.fetchCompanySettings(),
         ]);
+
+        if (cloudCompany.status === 'fulfilled' && cloudCompany.value) {
+          const c = cloudCompany.value;
+          setSettings((prev) => ({
+            ...prev,
+            ...(c.name ? { name: c.name } : {}),
+            ...(c.slogan ? { slogan: c.slogan } : {}),
+            ...(c.cnpj ? { cnpj: c.cnpj } : {}),
+            ...(c.phone ? { phone: c.phone } : {}),
+            ...(c.logoUrl !== undefined ? { logoUrl: c.logoUrl } : {}),
+          }));
+        }
 
         if (cloudCategories.status === 'fulfilled') {
           if (cloudCategories.value.length > 0) {
@@ -488,6 +501,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           window.dispatchEvent(new Event('gondola_categories_updated'));
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_info' }, async () => {
+        const fresh = await supabaseService.fetchCompanySettings();
+        if (fresh) {
+          setSettings((prev) => ({
+            ...prev,
+            ...(fresh.name ? { name: fresh.name } : {}),
+            ...(fresh.slogan ? { slogan: fresh.slogan } : {}),
+            ...(fresh.cnpj ? { cnpj: fresh.cnpj } : {}),
+            ...(fresh.phone ? { phone: fresh.phone } : {}),
+            ...(fresh.logoUrl !== undefined ? { logoUrl: fresh.logoUrl } : {}),
+          }));
+        }
+      })
       .subscribe();
 
     return () => {
@@ -624,7 +650,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSettings = (newSettings: Partial<StoreSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings((prev) => {
+      const merged = { ...prev, ...newSettings };
+      supabaseService.saveCompanySettings(merged).catch(console.error);
+      return merged;
+    });
     showNotification('Configurações atualizadas com sucesso!');
   };
 

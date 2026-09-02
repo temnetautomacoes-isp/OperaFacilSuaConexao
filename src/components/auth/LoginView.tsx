@@ -8,7 +8,8 @@ import {
   Eye, 
   EyeOff, 
   AlertCircle, 
-  Clock
+  Clock,
+  Building2
 } from 'lucide-react';
 import operafacilLogoImg from '../../assets/operafacil_logo.png';
 import ispVehicleImg from '../../assets/provedor_internet_carro.jpg';
@@ -124,17 +125,34 @@ export const LoginView: React.FC = () => {
         <div className="lg:col-span-6">
           <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/40 space-y-5">
             
-            {/* Header do Card */}
-            <div className="border-b border-slate-100 pb-3.5">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <User className="w-5 h-5 text-orange-500" />
-                  Identificação de Acesso
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Selecione o ambiente desejado e acesse seu posto de trabalho.
+            {/* Header do Card: Logo da Empresa + Nome da Empresa Centralizados */}
+            <div className="flex flex-col items-center justify-center text-center pb-4 border-b border-slate-100">
+              {settings.logoUrl ? (
+                <div className="mb-2.5 p-1.5 bg-slate-50 rounded-2xl shadow-xs border border-slate-200/80 flex items-center justify-center max-w-[200px]">
+                  <img
+                    src={settings.logoUrl}
+                    alt={settings.name || 'Logo da Empresa'}
+                    className="max-h-14 sm:max-h-16 w-auto object-contain rounded-xl"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md mb-2.5 border border-orange-400/30">
+                  <Building2 className="w-7 h-7 text-white" />
+                </div>
+              )}
+
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                {settings.name || 'OperaFácil Provedor'}
+              </h2>
+
+              {settings.slogan && (
+                <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-1">
+                  {settings.slogan}
                 </p>
-              </div>
+              )}
             </div>
 
             {/* SELEÇÃO DE AMBIENTE: COLABORADOR vs ERP */}
