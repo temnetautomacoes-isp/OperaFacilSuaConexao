@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { TimeClockPunchType, TimeClockRecord } from '../../types';
+import { TimeClockPunchType, TimeClockRecord, EmployeeDocument } from '../../types';
 import { 
   Clock, 
   Calendar, 
@@ -34,15 +34,35 @@ import {
   Wifi,
   Activity,
   Layers,
-  Award
+  Award,
+  Camera,
+  FolderLock,
+  Eye,
+  Check,
+  Zap,
+  Fingerprint,
+  FileCheck,
+  CalendarClock
 } from 'lucide-react';
+import { BiometricSelfieModal } from '../common/BiometricSelfieModal';
+import { JustifyAbsenceModal } from './JustifyAbsenceModal';
 
-type ColaboradorTab = 'ponto' | 'folha' | 'perfil';
+type ColaboradorTab = 'ponto' | 'folha' | 'documentos' | 'perfil';
+
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  contrato: { label: 'Contrato & Termos', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+  pessoal: { label: 'Documentos Pessoais', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+  aso_medico: { label: 'ASO / Saúde Ocupacional', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+  folha_ponto: { label: 'Folha de Ponto Assinada', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
+  certificacao: { label: 'Certificação & NRs', color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200' },
+  outros: { label: 'Outros Anexos', color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+};
 
 export const ColaboradorView: React.FC = () => {
   const { 
     currentUser, 
     timeRecords, 
+    employeeDocuments,
     punchClock, 
     updateEmployeeProfile, 
     settings, 
@@ -57,6 +77,16 @@ export const ColaboradorView: React.FC = () => {
   const [punchNotes, setPunchNotes] = useState<string>('');
   const [isSubmittingPunch, setIsSubmittingPunch] = useState<boolean>(false);
   const [recentPunchSuccess, setRecentPunchSuccess] = useState<string | null>(null);
+
+  // Modals
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState<boolean>(false);
+  const [targetPunchType, setTargetPunchType] = useState<TimeClockPunchType>('entry1');
+  const [isJustifyModalOpen, setIsJustifyModalOpen] = useState<boolean>(false);
+  const [selectedDateForJustify, setSelectedDateForJustify] = useState<string | undefined>(undefined);
+  
+  // Preview Modals
+  const [previewSelfie, setPreviewSelfie] = useState<{ url: string; title: string; time?: string; location?: string } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<EmployeeDocument | null>(null);
 
   // Folha de Ponto Filter State
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
@@ -103,18 +133,90 @@ export const ColaboradorView: React.FC = () => {
     return timeRecords.find((r) => r.userId === currentUser.id && r.date === todayStr);
   }, [timeRecords, currentUser, todayStr]);
 
-  // Handle Clock Punch
-  const handlePunch = (type: TimeClockPunchType) => {
+  // User's own documents
+  const myDocuments = useMemo(() => {
+    if (!currentUser) return [];
+    return employeeDocuments
+      .filter((d) => d.userId === currentUser.id)
+      .sort((a, b) => b.uploadDate.localeCompare(a.uploadDate));
+  }, [employeeDocuments, currentUser]);
+
+  // Determine the next intelligent punch step
+  const nextPunchInfo = useMemo(() => {
+    if (!todayRecord?.entry1) {
+      return {
+        type: 'entry1' as TimeClockPunchType,
+        label: 'Bater Entrada',
+        sublabel: '1º Turno (Início do Expediente)',
+        icon: LogIn,
+        color: 'from-orange-500 to-amber-500',
+        textColor: 'text-orange-500',
+        ringColor: 'ring-orange-500/30'
+      };
+    }
+    if (!todayRecord?.exit1) {
+      return {
+        type: 'exit1' as TimeClockPunchType,
+        label: 'Saída para Almoço',
+        sublabel: 'Pausa para Intervalo / Refeição',
+        icon: Coffee,
+        color: 'from-amber-500 to-yellow-500',
+        textColor: 'text-amber-500',
+        ringColor: 'ring-amber-500/30'
+      };
+    }
+    if (!todayRecord?.entry2) {
+      return {
+        type: 'entry2' as TimeClockPunchType,
+        label: 'Retorno do Almoço',
+        sublabel: '2º Turno (Fim do Intervalo)',
+        icon: UtensilsCrossed,
+        color: 'from-blue-600 to-indigo-600',
+        textColor: 'text-blue-500',
+        ringColor: 'ring-blue-500/30'
+      };
+    }
+    if (!todayRecord?.exit2) {
+      return {
+        type: 'exit2' as TimeClockPunchType,
+        label: 'Saída Final',
+        sublabel: 'Encerramento do Expediente Diário',
+        icon: LogOut,
+        color: 'from-emerald-600 to-teal-600',
+        textColor: 'text-emerald-500',
+        ringColor: 'ring-emerald-500/30'
+      };
+    }
+    return {
+      type: 'exit2' as TimeClockPunchType,
+      label: 'Jornada Concluída',
+      sublabel: 'Todas as 4 batidas de hoje foram registradas',
+      icon: CheckCircle2,
+      color: 'from-slate-700 to-slate-800',
+      textColor: 'text-slate-400',
+      ringColor: 'ring-slate-700/30',
+      isCompleted: true
+    };
+  }, [todayRecord]);
+
+  // Handle Opening Biometric Selfie modal for punch
+  const handleOpenPunchBiometric = (type: TimeClockPunchType) => {
+    setTargetPunchType(type);
+    setIsBiometricModalOpen(true);
+  };
+
+  // On Selfie Captured -> Submit Punch
+  const handleCaptureSelfieAndPunch = (selfieBase64: string) => {
     setIsSubmittingPunch(true);
     setRecentPunchSuccess(null);
 
     setTimeout(() => {
-      const res = punchClock(type, selectedLocation, punchNotes);
+      const res = punchClock(targetPunchType, selectedLocation, punchNotes, selfieBase64);
       setIsSubmittingPunch(false);
       if (res.success) {
         setPunchNotes('');
         setRecentPunchSuccess(res.message);
-        setTimeout(() => setRecentPunchSuccess(null), 5000);
+        setTimeout(() => setRecentPunchSuccess(null), 6000);
       }
     }, 300);
   };
@@ -129,7 +231,6 @@ export const ColaboradorView: React.FC = () => {
   const monthRecords = useMemo(() => {
     if (!currentUser) return [];
     
-    // Generate all calendar days for the selected month
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const result: { dateStr: string; dayNum: number; dayOfWeek: number; dayName: string; record?: TimeClockRecord }[] = [];
     const dayNamesShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -157,6 +258,7 @@ export const ColaboradorView: React.FC = () => {
     let daysWorked = 0;
     let extraMinutes = 0;
     let absences = 0;
+    let justifiedCount = 0;
 
     monthRecords.forEach((item) => {
       if (item.record) {
@@ -170,6 +272,9 @@ export const ColaboradorView: React.FC = () => {
         if (item.record.status === 'falta') {
           absences += 1;
         }
+        if (item.record.status === 'justificado') {
+          justifiedCount += 1;
+        }
       }
     });
 
@@ -181,6 +286,7 @@ export const ColaboradorView: React.FC = () => {
       totalExtraHours,
       daysWorked,
       absences,
+      justifiedCount,
       bankBalance: totalExtraHours > 0 ? `+${totalExtraHours}h` : `${totalExtraHours}h`
     };
   }, [monthRecords]);
@@ -240,11 +346,11 @@ export const ColaboradorView: React.FC = () => {
           </div>
 
           {/* Subheader Modern Tabs */}
-          <div className="flex items-center bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/80 shadow-inner self-start md:self-center">
+          <div className="flex items-center bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/80 shadow-inner self-start md:self-center flex-wrap gap-1">
             <button
               type="button"
               onClick={() => setActiveTab('ponto')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
                 activeTab === 'ponto'
                   ? 'bg-orange-500 text-white shadow-md'
                   : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -257,7 +363,7 @@ export const ColaboradorView: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('folha')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
                 activeTab === 'folha'
                   ? 'bg-orange-500 text-white shadow-md'
                   : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -269,8 +375,26 @@ export const ColaboradorView: React.FC = () => {
 
             <button
               type="button"
+              onClick={() => setActiveTab('documentos')}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                activeTab === 'documentos'
+                  ? 'bg-orange-500 text-white shadow-md'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Meus Documentos</span>
+              {myDocuments.length > 0 && (
+                <span className="text-[10px] bg-orange-600 text-white font-black px-1.5 py-0.2 rounded-full">
+                  {myDocuments.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('perfil')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
                 activeTab === 'perfil'
                   ? 'bg-orange-500 text-white shadow-md'
                   : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -290,17 +414,17 @@ export const ColaboradorView: React.FC = () => {
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* ======================================================================= */}
-        {/* TAB 1: BATER PONTO ELETRÔNICO */}
+        {/* TAB 1: BATER PONTO ELETRÔNICO COM BIOMETRIA & DESIGN LÚDICO */}
         {/* ======================================================================= */}
         {activeTab === 'ponto' && (
           <div className="space-y-6 animate-in fade-in duration-200">
             
-            {/* Top Clock Display Card */}
-            <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+            {/* Top Clock Display Card with Action Buttons */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
               
-              <div className="space-y-1.5 relative z-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-orange-400 text-xs font-bold shadow-xs">
+              <div className="space-y-2 relative z-10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-orange-400 text-xs font-bold shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-pulse" />
                   <span>Relógio Oficial Sincronizado (Horário de Brasília)</span>
                 </div>
@@ -314,233 +438,272 @@ export const ColaboradorView: React.FC = () => {
                 </p>
               </div>
 
-              {/* Status Indicator for Today */}
-              <div className="bg-slate-800/90 rounded-2xl p-4 sm:p-5 border border-slate-700 relative z-10 flex flex-col justify-between min-w-[240px]">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status da Jornada Hoje</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`w-3 h-3 rounded-full ${
-                    todayRecord?.exit2 
-                      ? 'bg-slate-400' 
-                      : todayRecord?.entry1 
-                      ? 'bg-emerald-500 animate-pulse' 
-                      : 'bg-orange-500'
-                  }`} />
-                  <span className="font-bold text-base text-white">
-                    {todayRecord?.exit2
-                      ? 'Jornada Encerrada'
-                      : todayRecord?.entry2
-                      ? 'Trabalhando (2º Turno)'
-                      : todayRecord?.exit1
-                      ? 'Intervalo de Almoço'
-                      : todayRecord?.entry1
-                      ? 'Trabalhando (1º Turno)'
-                      : 'Aguardando Entrada'}
-                  </span>
+              {/* Status Indicator & Justify CTA */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10">
+                <div className="bg-slate-800/90 rounded-2xl p-4 sm:p-5 border border-slate-700 flex flex-col justify-between min-w-[220px]">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Hoje</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`w-3 h-3 rounded-full ${
+                      todayRecord?.exit2 
+                        ? 'bg-slate-400' 
+                        : todayRecord?.entry1 
+                        ? 'bg-emerald-500 animate-pulse' 
+                        : 'bg-orange-500'
+                    }`} />
+                    <span className="font-bold text-sm sm:text-base text-white">
+                      {todayRecord?.exit2
+                        ? 'Jornada Encerrada'
+                        : todayRecord?.entry2
+                        ? 'Trabalhando (2º Turno)'
+                        : todayRecord?.exit1
+                        ? 'Intervalo de Almoço'
+                        : todayRecord?.entry1
+                        ? 'Trabalhando (1º Turno)'
+                        : 'Aguardando Entrada'}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
+                    <span>Horas Hoje:</span>
+                    <span className="font-mono font-bold text-orange-400">{todayRecord?.totalHours ? `${todayRecord.totalHours}h` : '0.0h'}</span>
+                  </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
-                  <span>Horas Hoje:</span>
-                  <span className="font-mono font-bold text-orange-400">{todayRecord?.totalHours ? `${todayRecord.totalHours}h` : '0.0h'}</span>
-                </div>
+                {/* Justify Absence Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDateForJustify(todayStr);
+                    setIsJustifyModalOpen(true);
+                  }}
+                  className="px-5 py-4 bg-gradient-to-r from-slate-800 to-slate-750 hover:from-slate-750 hover:to-slate-700 border border-slate-700 rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 transition-all shadow-md group cursor-pointer hover:border-orange-500/50"
+                >
+                  <CalendarClock className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-black text-white">Justificar Falta</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Anexar atestado / horas</span>
+                </button>
               </div>
             </div>
 
             {/* Notification Banner when punch succeeded */}
             {recentPunchSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top duration-200">
+              <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-5 py-3.5 rounded-2xl flex items-center gap-3 shadow-sm animate-in slide-in-from-top duration-200">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span className="text-sm font-bold">{recentPunchSuccess}</span>
+                <span className="text-xs sm:text-sm font-bold">{recentPunchSuccess}</span>
               </div>
             )}
 
-            {/* 4 Clock-In Action Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* ================================================================= */}
+            {/* PLAYFUL 3D BIOMETRIC SUPER BUTTON */}
+            {/* ================================================================= */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 flex flex-col items-center text-center relative overflow-hidden space-y-6">
               
-              {/* Card 1: Entrada (Início) */}
-              <div className={`rounded-3xl p-5 border transition-all flex flex-col justify-between ${
-                todayRecord?.entry1 
-                  ? 'bg-slate-50 border-slate-200 shadow-sm' 
-                  : 'bg-white border-orange-200 shadow-md ring-2 ring-orange-500/20'
-              }`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-2.5 rounded-2xl ${
-                    todayRecord?.entry1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    <LogIn className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">1º Período</span>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold">
+                  <Fingerprint className="w-4 h-4 text-orange-600 animate-pulse" />
+                  <span>Assinatura Biométrica Inteligente por Selfie</span>
                 </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-black text-base text-slate-900">Entrada</h3>
-                  <p className="text-xs text-slate-500">Início do expediente</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="font-mono font-bold text-sm text-slate-700">
-                    {todayRecord?.entry1 ? (
-                      <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        {todayRecord.entry1} ✅
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">--:--</span>
-                    )}
-                  </div>
-
-                  {!todayRecord?.entry1 && (
-                    <button
-                      type="button"
-                      disabled={isSubmittingPunch}
-                      onClick={() => handlePunch('entry1')}
-                      className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
-                    >
-                      Bater Entrada
-                    </button>
-                  )}
-                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                  {nextPunchInfo.isCompleted ? 'Parabéns! Jornada de Hoje Concluída' : `Pronto para ${nextPunchInfo.label}?`}
+                </h2>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  {nextPunchInfo.sublabel}. Ao clicar, a câmera frontal registrará sua foto biométrica com timestamp oficial.
+                </p>
               </div>
 
-              {/* Card 2: Saída Almoço */}
-              <div className={`rounded-3xl p-5 border transition-all flex flex-col justify-between ${
-                todayRecord?.exit1 
-                  ? 'bg-slate-50 border-slate-200 shadow-sm' 
-                  : todayRecord?.entry1
-                  ? 'bg-white border-orange-200 shadow-md ring-2 ring-orange-500/20'
-                  : 'bg-white border-slate-200 opacity-60'
-              }`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-2.5 rounded-2xl ${
-                    todayRecord?.exit1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    <Coffee className="w-5 h-5" />
+              {/* The Big Glowing 3D Button */}
+              <div className="relative flex items-center justify-center py-4">
+                {/* Outer pulsing ring */}
+                {!nextPunchInfo.isCompleted && (
+                  <div className="absolute w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-orange-500/15 animate-ping pointer-events-none" />
+                )}
+                
+                <button
+                  type="button"
+                  disabled={isSubmittingPunch || nextPunchInfo.isCompleted}
+                  onClick={() => handleOpenPunchBiometric(nextPunchInfo.type)}
+                  className={`relative z-10 w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-gradient-to-tr ${nextPunchInfo.color} p-2 shadow-2xl transition-all transform active:scale-95 hover:scale-105 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group border-4 border-white`}
+                >
+                  <div className="w-full h-full rounded-full bg-slate-950/20 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-1">
+                    <Camera className="w-8 h-8 sm:w-10 sm:h-10 text-white drop-shadow-md group-hover:scale-110 transition-transform animate-bounce" />
+                    <span className="font-black text-xs sm:text-sm tracking-tight drop-shadow-md">
+                      {nextPunchInfo.isCompleted ? 'Concluído' : 'BATER PONTO'}
+                    </span>
+                    <span className="text-[10px] font-mono text-orange-200 font-bold">
+                      📸 Selfie
+                    </span>
                   </div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Pausa</span>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-black text-base text-slate-900">Saída Almoço</h3>
-                  <p className="text-xs text-slate-500">Início do intervalo</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="font-mono font-bold text-sm text-slate-700">
-                    {todayRecord?.exit1 ? (
-                      <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        {todayRecord.exit1} ✅
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">--:--</span>
-                    )}
-                  </div>
-
-                  {todayRecord?.entry1 && !todayRecord?.exit1 && (
-                    <button
-                      type="button"
-                      disabled={isSubmittingPunch}
-                      onClick={() => handlePunch('exit1')}
-                      className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
-                    >
-                      Bater Saída
-                    </button>
-                  )}
-                </div>
+                </button>
               </div>
 
-              {/* Card 3: Retorno Almoço */}
-              <div className={`rounded-3xl p-5 border transition-all flex flex-col justify-between ${
-                todayRecord?.entry2 
-                  ? 'bg-slate-50 border-slate-200 shadow-sm' 
-                  : todayRecord?.exit1
-                  ? 'bg-white border-orange-200 shadow-md ring-2 ring-orange-500/20'
-                  : 'bg-white border-slate-200 opacity-60'
-              }`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-2.5 rounded-2xl ${
-                    todayRecord?.entry2 ? 'bg-slate-100 text-slate-600' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    <UtensilsCrossed className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">2º Período</span>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-black text-base text-slate-900">Retorno Almoço</h3>
-                  <p className="text-xs text-slate-500">Fim do intervalo</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="font-mono font-bold text-sm text-slate-700">
-                    {todayRecord?.entry2 ? (
-                      <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        {todayRecord.entry2} ✅
+              {/* Progress Tracker / Journey Steps */}
+              <div className="w-full max-w-3xl pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  
+                  {/* Step 1: Entrada */}
+                  <div 
+                    onClick={() => !todayRecord?.entry1 && handleOpenPunchBiometric('entry1')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
+                      todayRecord?.entry1 
+                        ? 'bg-emerald-50 border-emerald-200 shadow-xs' 
+                        : 'bg-slate-50 border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <LogIn className={`w-4 h-4 ${todayRecord?.entry1 ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400">1º Turno</span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 block">Entrada</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs font-bold text-slate-700">
+                        {todayRecord?.entry1 || '--:--'}
                       </span>
-                    ) : (
-                      <span className="text-slate-400">--:--</span>
-                    )}
+                      {todayRecord?.selfies?.entry1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewSelfie({
+                              url: todayRecord.selfies!.entry1!,
+                              title: 'Selfie Biométrica — Entrada',
+                              time: todayRecord.entry1,
+                              location: todayRecord.location
+                            });
+                          }}
+                          className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" /> Foto
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {todayRecord?.exit1 && !todayRecord?.entry2 && (
-                    <button
-                      type="button"
-                      disabled={isSubmittingPunch}
-                      onClick={() => handlePunch('entry2')}
-                      className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
-                    >
-                      Bater Retorno
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Card 4: Saída (Fim) */}
-              <div className={`rounded-3xl p-5 border transition-all flex flex-col justify-between ${
-                todayRecord?.exit2 
-                  ? 'bg-slate-50 border-slate-200 shadow-sm' 
-                  : todayRecord?.entry2
-                  ? 'bg-white border-orange-200 shadow-md ring-2 ring-orange-500/20'
-                  : 'bg-white border-slate-200 opacity-60'
-              }`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-2.5 rounded-2xl ${
-                    todayRecord?.exit2 ? 'bg-slate-100 text-slate-600' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    <LogOut className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Encerramento</span>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-black text-base text-slate-900">Saída Final</h3>
-                  <p className="text-xs text-slate-500">Fim do expediente diário</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="font-mono font-bold text-sm text-slate-700">
-                    {todayRecord?.exit2 ? (
-                      <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        {todayRecord.exit2} ✅
+                  {/* Step 2: Saída Almoço */}
+                  <div 
+                    onClick={() => todayRecord?.entry1 && !todayRecord?.exit1 && handleOpenPunchBiometric('exit1')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
+                      todayRecord?.exit1 
+                        ? 'bg-emerald-50 border-emerald-200 shadow-xs' 
+                        : todayRecord?.entry1
+                        ? 'bg-slate-50 border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 cursor-pointer'
+                        : 'bg-slate-50/60 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <Coffee className={`w-4 h-4 ${todayRecord?.exit1 ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400">Pausa</span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 block">Saída Almoço</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs font-bold text-slate-700">
+                        {todayRecord?.exit1 || '--:--'}
                       </span>
-                    ) : (
-                      <span className="text-slate-400">--:--</span>
-                    )}
+                      {todayRecord?.selfies?.exit1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewSelfie({
+                              url: todayRecord.selfies!.exit1!,
+                              title: 'Selfie Biométrica — Saída Almoço',
+                              time: todayRecord.exit1,
+                              location: todayRecord.location
+                            });
+                          }}
+                          className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" /> Foto
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {todayRecord?.entry2 && !todayRecord?.exit2 && (
-                    <button
-                      type="button"
-                      disabled={isSubmittingPunch}
-                      onClick={() => handlePunch('exit2')}
-                      className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
-                    >
-                      Bater Saída
-                    </button>
-                  )}
+                  {/* Step 3: Retorno Almoço */}
+                  <div 
+                    onClick={() => todayRecord?.exit1 && !todayRecord?.entry2 && handleOpenPunchBiometric('entry2')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
+                      todayRecord?.entry2 
+                        ? 'bg-emerald-50 border-emerald-200 shadow-xs' 
+                        : todayRecord?.exit1
+                        ? 'bg-slate-50 border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 cursor-pointer'
+                        : 'bg-slate-50/60 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <UtensilsCrossed className={`w-4 h-4 ${todayRecord?.entry2 ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400">2º Turno</span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 block">Retorno Almoço</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs font-bold text-slate-700">
+                        {todayRecord?.entry2 || '--:--'}
+                      </span>
+                      {todayRecord?.selfies?.entry2 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewSelfie({
+                              url: todayRecord.selfies!.entry2!,
+                              title: 'Selfie Biométrica — Retorno Almoço',
+                              time: todayRecord.entry2,
+                              location: todayRecord.location
+                            });
+                          }}
+                          className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" /> Foto
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 4: Saída Final */}
+                  <div 
+                    onClick={() => todayRecord?.entry2 && !todayRecord?.exit2 && handleOpenPunchBiometric('exit2')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
+                      todayRecord?.exit2 
+                        ? 'bg-emerald-50 border-emerald-200 shadow-xs' 
+                        : todayRecord?.entry2
+                        ? 'bg-slate-50 border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 cursor-pointer'
+                        : 'bg-slate-50/60 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <LogOut className={`w-4 h-4 ${todayRecord?.exit2 ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400">Encerramento</span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 block">Saída Final</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs font-bold text-slate-700">
+                        {todayRecord?.exit2 || '--:--'}
+                      </span>
+                      {todayRecord?.selfies?.exit2 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewSelfie({
+                              url: todayRecord.selfies!.exit2!,
+                              title: 'Selfie Biométrica — Saída Final',
+                              time: todayRecord.exit2,
+                              location: todayRecord.location
+                            });
+                          }}
+                          className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" /> Foto
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
             </div>
 
-            {/* Location & Justifications Card */}
+            {/* Location & Notes Configuration Card */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-orange-500" />
@@ -567,7 +730,7 @@ export const ColaboradorView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Observação ou Justificativa (Opcional):
+                    Observação ou Justificativa da Batida (Opcional):
                   </label>
                   <input
                     type="text"
@@ -582,9 +745,9 @@ export const ColaboradorView: React.FC = () => {
               <div className="pt-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Autenticação digital segura • Registro criptografado nos termos da Portaria MTE</span>
+                  <span>Autenticação digital biométrica com foto • Registro criptografado nos termos da Portaria MTE</span>
                 </div>
-                <span className="font-mono text-slate-400">IP: 187.94.120.45 • Provedor ISP Fibra</span>
+                <span className="font-mono text-slate-400">IP: 187.94.120.45 • OperaFácil Conexão ISP</span>
               </div>
             </div>
 
@@ -605,7 +768,7 @@ export const ColaboradorView: React.FC = () => {
                   <span>Espelho de Ponto Mensal</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Consulte os registros diários, saldo de horas e banco de horas acumulado.
+                  Consulte os registros diários, fotos biométricas e justificativas aprovadas pelo RH.
                 </p>
               </div>
 
@@ -629,6 +792,15 @@ export const ColaboradorView: React.FC = () => {
                   <option value={2025}>2025</option>
                   <option value={2026}>2026</option>
                 </select>
+
+                <button
+                  type="button"
+                  onClick={() => setIsJustifyModalOpen(true)}
+                  className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <CalendarClock className="w-4 h-4 text-orange-600" />
+                  <span>Justificar Falta</span>
+                </button>
 
                 <button
                   type="button"
@@ -672,7 +844,9 @@ export const ColaboradorView: React.FC = () => {
                 <div className="font-mono text-2xl font-black text-slate-900 mt-1">
                   {monthlyStats.daysWorked} dias
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">{monthlyStats.absences} falta(s)</span>
+                <span className="text-[11px] text-slate-400 mt-0.5 block">
+                  {monthlyStats.justifiedCount > 0 ? `${monthlyStats.justifiedCount} justificada(s)` : `${monthlyStats.absences} falta(s)`}
+                </span>
               </div>
             </div>
 
@@ -694,16 +868,19 @@ export const ColaboradorView: React.FC = () => {
                       <th className="py-3 px-3 text-center">Saída 1</th>
                       <th className="py-3 px-3 text-center">Entrada 2</th>
                       <th className="py-3 px-3 text-center">Saída 2</th>
-                      <th className="py-3 px-3 text-center">Total Horas</th>
+                      <th className="py-3 px-3 text-center">Total</th>
                       <th className="py-3 px-3 text-center">Saldo</th>
                       <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4">Local / Observações</th>
+                      <th className="py-3 px-3 text-center">Biometria</th>
+                      <th className="py-3 px-4">Ocorrência / Justificativa</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {monthRecords.map((item) => {
                       const isWeekend = item.dayOfWeek === 0 || item.dayOfWeek === 6;
                       const isToday = item.dateStr === todayStr;
+                      const hasSelfies = item.record?.selfies && Object.keys(item.record.selfies).length > 0;
+                      const hasJustification = Boolean(item.record?.justification);
 
                       return (
                         <tr 
@@ -754,7 +931,11 @@ export const ColaboradorView: React.FC = () => {
                           </td>
 
                           <td className="py-2.5 px-4 text-center">
-                            {item.record?.status === 'folga' ? (
+                            {item.record?.status === 'justificado' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                Justificado
+                              </span>
+                            ) : item.record?.status === 'folga' ? (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                 Folga / DSR
                               </span>
@@ -773,9 +954,48 @@ export const ColaboradorView: React.FC = () => {
                             )}
                           </td>
 
+                          {/* Biometria Snapshot Icon */}
+                          <td className="py-2.5 px-3 text-center">
+                            {hasSelfies ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const sUrl = item.record?.selfies?.entry1 || item.record?.selfies?.justification || Object.values(item.record?.selfies || {})[0];
+                                  if (sUrl) {
+                                    setPreviewSelfie({
+                                      url: sUrl,
+                                      title: `Selfie Biométrica — ${item.dateStr}`,
+                                      time: item.record?.entry1 || 'Registrado',
+                                      location: item.record?.location
+                                    });
+                                  }
+                                }}
+                                className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer"
+                                title="Visualizar Foto da Batida"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+
                           <td className="py-2.5 px-4 text-slate-600">
                             <span className="truncate block max-w-xs text-[11px]" title={item.record?.notes || item.record?.location}>
-                              {item.record?.notes || item.record?.location || '—'}
+                              {item.record?.notes || item.record?.location || (
+                                !isWeekend && !item.record?.entry1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedDateForJustify(item.dateStr);
+                                      setIsJustifyModalOpen(true);
+                                    }}
+                                    className="text-[10px] text-orange-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                                  >
+                                    + Justificar este dia
+                                  </button>
+                                ) : '—'
+                              )}
                             </span>
                           </td>
                         </tr>
@@ -790,7 +1010,122 @@ export const ColaboradorView: React.FC = () => {
         )}
 
         {/* ======================================================================= */}
-        {/* TAB 3: MEUS DADOS & CADASTRO DO COLABORADOR */}
+        {/* TAB 3: MEUS DOCUMENTOS (CONTRATOS, ASO, TERMOS, CERTIFICADOS) */}
+        {/* ======================================================================= */}
+        {activeTab === 'documentos' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <FileCheck className="w-5 h-5 text-orange-500" />
+                  <span>Meus Documentos Oficiais</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Consulte e baixe seus contratos de trabalho, atestados ocupacionais (ASO), termos de EPI e certificados.
+                </p>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700">
+                Total Arquivado: <strong className="text-orange-600 font-mono">{myDocuments.length}</strong> documento(s)
+              </div>
+            </div>
+
+            {/* Documents Grid */}
+            {myDocuments.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-3">
+                <FolderLock className="w-12 h-12 text-slate-300 mx-auto" />
+                <h3 className="font-extrabold text-base text-slate-800">
+                  Nenhum documento arquivado na sua pasta ainda
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Os documentos de admissão, termos de cautela, certificados NR e atestados médicos cadastrados pelo RH ficarão disponíveis aqui para download e visualização.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myDocuments.map((doc) => {
+                  const catCfg = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.outros;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="p-3 rounded-2xl bg-orange-50 text-orange-600 border border-orange-100">
+                            <FileText className="w-6 h-6" />
+                          </div>
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${catCfg.bg} ${catCfg.color}`}>
+                            {catCfg.label}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-extrabold text-slate-900 leading-tight">
+                            {doc.name}
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                            {doc.notes || 'Documento oficial arquivado na pasta digital do colaborador.'}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-100 space-y-1 text-[11px] text-slate-600">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Arquivo:</span>
+                            <span className="font-mono text-slate-700 font-bold truncate max-w-[150px]">{doc.fileName || 'documento.pdf'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Tamanho:</span>
+                            <span className="font-mono text-slate-500">{doc.fileSize || '350 KB'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Data de Envio:</span>
+                            <span>{new Date(doc.uploadDate).toLocaleDateString('pt-BR')}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc(doc)}
+                          className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Visualizar</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Baixar Documento"
+                          onClick={() => {
+                            if (doc.fileUrl) {
+                              const a = document.createElement('a');
+                              a.href = doc.fileUrl;
+                              a.download = doc.fileName || `${doc.name}.pdf`;
+                              a.click();
+                            } else {
+                              showNotification(`Download do documento "${doc.name}" iniciado.`);
+                            }
+                          }}
+                          className="p-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl transition-colors cursor-pointer border border-orange-200"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ======================================================================= */}
+        {/* TAB 4: MEUS DADOS & CADASTRO DO COLABORADOR */}
         {/* ======================================================================= */}
         {activeTab === 'perfil' && (
           <div className="space-y-6 animate-in fade-in duration-200">
@@ -970,6 +1305,189 @@ export const ColaboradorView: React.FC = () => {
         )}
 
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL: BIOMETRIC SELFIE CAMERA */}
+      {/* ========================================================================= */}
+      {isBiometricModalOpen && currentUser && (
+        <BiometricSelfieModal
+          isOpen={isBiometricModalOpen}
+          onClose={() => setIsBiometricModalOpen(false)}
+          onCapture={handleCaptureSelfieAndPunch}
+          title="Assinatura Biométrica por Selfie"
+          subtitle="Posicione seu rosto dentro do enquadramento e tire a selfie para validar sua identidade na batida de ponto."
+          employeeName={currentUser.name}
+          employeeCode={currentUser.registrationCode || 'COL-001'}
+          locationName={selectedLocation}
+          actionTypeLabel={
+            targetPunchType === 'entry1' ? 'Entrada (1º Turno)' :
+            targetPunchType === 'exit1' ? 'Saída Almoço' :
+            targetPunchType === 'entry2' ? 'Retorno Almoço' : 'Saída Final'
+          }
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: JUSTIFY ABSENCE */}
+      {/* ========================================================================= */}
+      {isJustifyModalOpen && (
+        <JustifyAbsenceModal
+          isOpen={isJustifyModalOpen}
+          onClose={() => {
+            setIsJustifyModalOpen(false);
+            setSelectedDateForJustify(undefined);
+          }}
+          initialDate={selectedDateForJustify}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PREVIEW SELFIE SNAPSHOT */}
+      {/* ========================================================================= */}
+      {previewSelfie && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl text-white">
+            <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-orange-400" />
+                <span className="text-sm font-bold text-white">{previewSelfie.title}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewSelfie(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="aspect-square rounded-2xl overflow-hidden bg-black border border-slate-800 relative">
+                <img
+                  src={previewSelfie.url}
+                  alt="Selfie Biométrica"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Horário:</span>
+                  <span className="font-mono font-bold text-white">{previewSelfie.time || '—'}</span>
+                </div>
+                {previewSelfie.location && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Local:</span>
+                    <span className="font-semibold text-orange-300 truncate max-w-[200px]">{previewSelfie.location}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 pt-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Biometria verificada e vinculada ao espelho de ponto</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewSelfie(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PREVIEW DOCUMENT */}
+      {/* ========================================================================= */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-orange-400" />
+                <span className="font-bold text-sm truncate max-w-md">{previewDoc.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewDoc(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Categoria:</span>
+                  <span className="font-bold text-orange-600 uppercase">{CATEGORY_CONFIG[previewDoc.category]?.label || previewDoc.category}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Arquivo:</span>
+                  <span className="font-mono text-slate-800">{previewDoc.fileName || 'documento.pdf'} ({previewDoc.fileSize || '350 KB'})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Data de Envio:</span>
+                  <span>{new Date(previewDoc.uploadDate).toLocaleDateString('pt-BR')}</span>
+                </div>
+                {previewDoc.notes && (
+                  <div className="pt-2 border-t border-slate-200">
+                    <span className="font-bold text-slate-500 block mb-0.5">Observações:</span>
+                    <p className="text-slate-700 italic">{previewDoc.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              {previewDoc.fileUrl ? (
+                previewDoc.fileUrl.startsWith('data:image/') ? (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-96 flex items-center justify-center bg-slate-900">
+                    <img src={previewDoc.fileUrl} alt={previewDoc.name} className="max-h-96 object-contain" />
+                  </div>
+                ) : (
+                  <iframe src={previewDoc.fileUrl} title={previewDoc.name} className="w-full h-80 border border-slate-200 rounded-2xl" />
+                )
+              ) : (
+                <div className="p-8 bg-slate-50 rounded-2xl text-center text-slate-400 border border-dashed border-slate-300">
+                  <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                  <p className="font-bold text-slate-600">Documento Oficial Arquivado no RH</p>
+                  <p className="text-[11px] mt-1">O arquivo físico e digital está autenticado nos registros internos da empresa.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setPreviewDoc(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Fechar
+              </button>
+
+              {previewDoc.fileUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = previewDoc.fileUrl!;
+                    a.download = previewDoc.fileName || `${previewDoc.name}.pdf`;
+                    a.click();
+                  }}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar Arquivo</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* MODAL 1: ATUALIZAR CONTATOS DO PERFIL */}

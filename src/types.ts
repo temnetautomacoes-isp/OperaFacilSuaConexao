@@ -177,6 +177,7 @@ export interface UserPermissions {
   canAccessFinanceiro: boolean;
   canAccessRelatorios: boolean;
   canAccessConfiguracoes: boolean;
+  canAccessColaborador?: boolean;
 }
 
 export type DocumentCategory = 
@@ -213,6 +214,24 @@ export interface TimeClockAdjustmentLog {
   adjustedAt: string; // Timestamp ISO do ajuste
 }
 
+export interface TimeClockJustification {
+  id: string;
+  date: string;          // Data da ausência/falta (YYYY-MM-DD)
+  startTime: string;     // Horário início (HH:mm)
+  endTime: string;       // Horário fim (HH:mm)
+  isFullDay?: boolean;   // Falta de dia inteiro
+  reason: string;        // Motivo / Justificativa detalhada
+  documentUrl?: string;  // Atestado ou documento comprobatório em base64/URL
+  documentName?: string; // Nome do arquivo anexo
+  documentSize?: string;
+  selfieUrl: string;     // Assinatura biométrica por selfie obrigatória
+  submittedAt: string;   // Timestamp ISO
+  status: 'pendente' | 'aprovado' | 'rejeitado';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
 export interface TimeClockRecord {
   id: string;
   userId: string;
@@ -229,6 +248,14 @@ export interface TimeClockRecord {
   location?: string;
   deviceInfo?: string;
   ipAddress?: string;
+  selfies?: {
+    entry1?: string;
+    exit1?: string;
+    entry2?: string;
+    exit2?: string;
+    justification?: string;
+  }; // Fotos biométricas registradas nas batidas
+  justification?: TimeClockJustification; // Dados da justificativa de falta/ausência
   adjustments?: TimeClockAdjustmentLog[]; // Histórico de auditoria de edições/exclusões
 }
 

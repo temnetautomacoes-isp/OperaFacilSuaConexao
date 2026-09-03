@@ -229,6 +229,16 @@ export const RecursosHumanosModule: React.FC = () => {
     fileUrl: ''
   });
 
+  const [previewSelfie, setPreviewSelfie] = useState<{
+    url: string;
+    title: string;
+    userName: string;
+    date: string;
+    location?: string;
+    time?: string;
+    justification?: any;
+  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editUserPhotoInputRef = useRef<HTMLInputElement>(null);
   const newUserPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -1152,6 +1162,7 @@ export const RecursosHumanosModule: React.FC = () => {
                     <th className="py-3 px-3 text-center">Saída 2</th>
                     <th className="py-3 px-4 text-center">Total Horas</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-3 text-center">Biometria</th>
                     <th className="py-3 px-4 text-center">Auditoria</th>
                     <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
@@ -1159,7 +1170,7 @@ export const RecursosHumanosModule: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredTimeRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
+                      <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
                         <Clock className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                         Nenhum registro de ponto localizado para os filtros selecionados.
                       </td>
@@ -1169,6 +1180,8 @@ export const RecursosHumanosModule: React.FC = () => {
                       const dateObj = new Date(r.date + 'T00:00:00');
                       const dayOfWeek = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' });
                       const adjustmentsCount = r.adjustments?.length || 0;
+                      const hasSelfies = r.selfies && Object.keys(r.selfies).length > 0;
+                      const hasJustification = Boolean(r.justification);
 
                       // Helper to render interactive individual punch slot
                       const renderPunchSlot = (field: TimeClockPunchType, val?: string) => {
@@ -1231,7 +1244,9 @@ export const RecursosHumanosModule: React.FC = () => {
 
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider ${
-                              r.status === 'extra'
+                              r.status === 'justificado'
+                                ? 'bg-purple-100 text-purple-700'
+                                : r.status === 'extra'
                                 ? 'bg-orange-100 text-orange-700'
                                 : r.status === 'atraso'
                                 ? 'bg-rose-100 text-rose-700'
@@ -1241,6 +1256,36 @@ export const RecursosHumanosModule: React.FC = () => {
                             }`}>
                               {r.status}
                             </span>
+                          </td>
+
+                          {/* Biometria & Justificativas Visualizer */}
+                          <td className="py-3 px-3 text-center">
+                            {hasSelfies || hasJustification ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const selfieUrl = r.selfies?.entry1 || r.selfies?.justification || Object.values(r.selfies || {})[0];
+                                  if (selfieUrl || r.justification) {
+                                    setPreviewSelfie({
+                                      url: selfieUrl || '',
+                                      title: `Assinatura Biométrica — ${r.userName}`,
+                                      userName: r.userName,
+                                      date: r.date,
+                                      location: r.location,
+                                      time: r.entry1,
+                                      justification: r.justification
+                                    });
+                                  }
+                                }}
+                                className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 font-bold text-[11px]"
+                                title="Visualizar Selfie Biométrica e Atestados"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                {hasJustification && <span className="text-[10px] text-purple-700 font-extrabold bg-purple-100 px-1 rounded">Atestado</span>}
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 font-mono text-xs">—</span>
+                            )}
                           </td>
 
                           <td className="py-3 px-4 text-center">
@@ -2965,6 +3010,7 @@ export const RecursosHumanosModule: React.FC = () => {
                 {/* Grid of Permission Checkboxes */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
                   {[
+                    { key: 'canAccessColaborador' as const, label: 'Portal do Colaborador', desc: 'Acesso a dados, documentos e ponto com biometria', icon: '📱' },
                     { key: 'canAccessEstoque' as const, label: 'Estoque & Produtos', desc: 'Entradas, saídas e controle', icon: '📦' },
                     { key: 'canAccessRh' as const, label: 'Recursos Humanos', desc: 'Gestão de equipe e ponto', icon: '👥' },
                     { key: 'canAccessFinanceiro' as const, label: 'Financeiro', desc: 'Contas, fluxo e caixa', icon: '💰' },
@@ -3411,6 +3457,7 @@ export const RecursosHumanosModule: React.FC = () => {
                 {/* Grid of Permission Checkboxes */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
                   {[
+                    { key: 'canAccessColaborador' as const, label: 'Portal do Colaborador', desc: 'Acesso a dados, documentos e ponto com biometria', icon: '📱' },
                     { key: 'canAccessEstoque' as const, label: 'Estoque & Produtos', desc: 'Entradas, saídas e controle', icon: '📦' },
                     { key: 'canAccessRh' as const, label: 'Recursos Humanos', desc: 'Gestão de equipe e ponto', icon: '👥' },
                     { key: 'canAccessFinanceiro' as const, label: 'Financeiro', desc: 'Contas, fluxo e caixa', icon: '💰' },
@@ -3995,6 +4042,111 @@ export const RecursosHumanosModule: React.FC = () => {
             showNotification('Enquadramento da foto aplicado com sucesso!');
           }}
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 17. MODAL: VISUALIZAR FOTO BIOMÉTRICA & JUSTIFICATIVA (RH) */}
+      {/* ========================================================================= */}
+      {previewSelfie && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-white">
+            <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-orange-400" />
+                <div>
+                  <span className="text-sm font-bold text-white block">{previewSelfie.title}</span>
+                  <span className="text-[10px] text-slate-400">Assinatura Biométrica do Colaborador</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewSelfie(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Photo */}
+              {previewSelfie.url ? (
+                <div className="aspect-square rounded-2xl overflow-hidden bg-black border border-slate-800 relative max-w-sm mx-auto shadow-inner">
+                  <img
+                    src={previewSelfie.url}
+                    alt="Selfie Biométrica"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 left-2 right-2 bg-black/70 backdrop-blur-xs p-2 rounded-xl text-[10px] border border-white/10 flex justify-between items-center">
+                    <span className="font-bold text-white">{previewSelfie.userName}</span>
+                    <span className="font-mono text-orange-400">{previewSelfie.date}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 bg-slate-950 rounded-2xl text-center text-slate-400 border border-slate-800">
+                  <Camera className="w-8 h-8 mx-auto text-slate-600 mb-1" />
+                  <p className="text-xs font-bold text-slate-300">Sem foto selfie anexada</p>
+                </div>
+              )}
+
+              {/* Justification details if present */}
+              {previewSelfie.justification && (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-purple-900/50 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="font-black text-purple-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <FileCheck className="w-4 h-4" /> Justificativa de Falta / Ausência
+                    </span>
+                    <span className="bg-purple-950/80 text-purple-300 px-2 py-0.5 rounded-full text-[10px] font-bold border border-purple-800">
+                      {previewSelfie.justification.isFullDay ? 'Dia Inteiro' : `${previewSelfie.justification.startTime} às ${previewSelfie.justification.endTime}`}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-bold block mb-0.5">Motivo / Descrição:</span>
+                    <p className="text-slate-200 bg-slate-900 p-2 rounded-xl border border-slate-800 font-medium">
+                      {previewSelfie.justification.reason}
+                    </p>
+                  </div>
+
+                  {previewSelfie.justification.documentUrl && (
+                    <div className="pt-2 flex items-center justify-between bg-purple-950/30 p-2.5 rounded-xl border border-purple-800/40">
+                      <div className="flex items-center gap-2 truncate">
+                        <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                        <span className="font-bold text-slate-200 text-xs truncate">
+                          {previewSelfie.justification.documentName || 'Atestado_Medico.pdf'}
+                        </span>
+                      </div>
+                      <a
+                        href={previewSelfie.justification.documentUrl}
+                        download={previewSelfie.justification.documentName || 'atestado.pdf'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Baixar
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Audit Badge */}
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs flex items-center gap-2 text-emerald-400">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>Assinatura biométrica registrada e auditada nos termos da Portaria MTE.</span>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewSelfie(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Fechar Visualização
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

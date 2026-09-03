@@ -297,6 +297,8 @@ export const supabaseService = {
       status: r.status,
       notes: r.notes,
       location: r.location,
+      selfies: r.selfies || undefined,
+      justification: r.justification || undefined,
     }));
   },
 
@@ -315,6 +317,8 @@ export const supabaseService = {
       status: rec.status,
       notes: rec.notes,
       location: rec.location,
+      selfies: rec.selfies || null,
+      justification: rec.justification || null,
     });
   },
 

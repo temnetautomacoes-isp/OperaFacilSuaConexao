@@ -63,7 +63,20 @@ interface AppContextType {
   
   // Ponto Eletrônico & Gestão do Colaborador (RH)
   timeRecords: TimeClockRecord[];
-  punchClock: (type: TimeClockPunchType, location?: string, notes?: string) => { success: boolean; message: string };
+  punchClock: (type: TimeClockPunchType, location?: string, notes?: string, selfieUrl?: string) => { success: boolean; message: string };
+  justifyAbsence: (data: {
+    userId: string;
+    userName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    isFullDay?: boolean;
+    reason: string;
+    documentUrl?: string;
+    documentName?: string;
+    documentSize?: string;
+    selfieUrl: string;
+  }) => void;
   updateTimeRecord: (id: string, updated: Partial<TimeClockRecord>) => void;
   deleteTimeRecord: (id: string) => void;
   addTimeRecordManual: (record: Omit<TimeClockRecord, 'id'>) => void;
@@ -1403,6 +1416,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           }
 
+          if (targetEnv === 'colaborador' && userProfile.permissions && userProfile.permissions.canAccessColaborador === false) {
+            return {
+              success: false,
+              message: 'Acesso Restrito: Seu perfil não possui permissão para acessar a Área do Colaborador. Solicite autorização ao RH.',
+            };
+          }
+
           setCurrentUser(userProfile);
           setEnvironment(targetEnv);
 
@@ -1465,6 +1485,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { 
         success: false, 
         message: 'Acesso Restrito: O perfil selecionado ("Operador") não possui permissão para acessar o Painel da Gerência (ERP).' 
+      };
+    }
+
+    // Checagem de acesso para Área do Colaborador
+    if (targetEnv === 'colaborador' && userToAuth.permissions && userToAuth.permissions.canAccessColaborador === false) {
+      return {
+        success: false,
+        message: 'Acesso Restrito: Seu perfil não possui permissão para acessar a Área do Colaborador. Solicite autorização ao RH.'
       };
     }
 
@@ -1573,7 +1601,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { totalHours, extraHours };
   };
 
-  const punchClock = (type: TimeClockPunchType, location = 'Sede Central ISP', notes?: string) => {
+  const punchClock = (type: TimeClockPunchType, location = 'Sede Central ISP', notes?: string, selfieUrl?: string) => {
     if (!currentUser) {
       return { success: false, message: 'Nenhum colaborador autenticado no momento.' };
     }
@@ -1592,6 +1620,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       exit2: 'Saída (Fim do Expediente)'
     };
 
+    const newSelfies = {
+      ...(existing?.selfies || {}),
+      ...(selfieUrl ? { [type]: selfieUrl } : {})
+    };
+
     if (existing) {
       const e1 = type === 'entry1' ? timeStr : existing.entry1;
       const ex1 = type === 'exit1' ? timeStr : existing.exit1;
@@ -1606,7 +1639,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notes: notes ? (existing.notes ? `${existing.notes}; ${notes}` : notes) : existing.notes,
         totalHours,
         extraHours,
-        status: extraHours > 0 ? 'extra' : 'normal'
+        status: extraHours > 0 ? 'extra' : 'normal',
+        selfies: newSelfies
       };
 
       updatedRecord = { ...existing, ...updatedFields };
@@ -1623,15 +1657,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'normal',
         location,
         notes,
+        selfies: newSelfies,
         deviceInfo: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mobile') ? 'Dispositivo Móvel' : 'Terminal Web Desktop',
       };
       setTimeRecords((prev) => [updatedRecord, ...prev]);
     }
 
     supabaseService.saveTimeRecord(updatedRecord).catch(console.error);
-    const msg = `Ponto registrado com sucesso: ${typeLabels[type]} às ${timeStr}!`;
+    const msg = `Ponto registrado com sucesso: ${typeLabels[type]} às ${timeStr}! Biometria validada.`;
     showNotification(msg);
     return { success: true, message: msg };
+  };
+
+  const justifyAbsence = (data: {
+    userId: string;
+    userName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    isFullDay?: boolean;
+    reason: string;
+    documentUrl?: string;
+    documentName?: string;
+    documentSize?: string;
+    selfieUrl: string;
+  }) => {
+    const existing = timeRecords.find((r) => r.userId === data.userId && r.date === data.date);
+    const justificationObj: TimeClockJustification = {
+      id: `just-${Date.now()}`,
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      isFullDay: data.isFullDay,
+      reason: data.reason,
+      documentUrl: data.documentUrl,
+      documentName: data.documentName,
+      documentSize: data.documentSize,
+      selfieUrl: data.selfieUrl,
+      submittedAt: new Date().toISOString(),
+      status: 'pendente'
+    };
+
+    let recordToSave: TimeClockRecord;
+    if (existing) {
+      recordToSave = {
+        ...existing,
+        status: 'justificado',
+        notes: existing.notes ? `${existing.notes} | Justificativa: ${data.reason}` : `Justificativa: ${data.reason}`,
+        justification: justificationObj,
+        selfies: {
+          ...(existing.selfies || {}),
+          justification: data.selfieUrl
+        }
+      };
+      setTimeRecords((prev) => prev.map((r) => (r.id === existing.id ? recordToSave : r)));
+    } else {
+      recordToSave = {
+        id: `time-${Date.now()}`,
+        userId: data.userId,
+        userName: data.userName,
+        date: data.date,
+        status: 'justificado',
+        notes: `Justificativa: ${data.reason}`,
+        justification: justificationObj,
+        selfies: {
+          justification: data.selfieUrl
+        },
+        deviceInfo: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mobile') ? 'Dispositivo Móvel' : 'Terminal Web Desktop',
+      };
+      setTimeRecords((prev) => [recordToSave, ...prev]);
+    }
+
+    supabaseService.saveTimeRecord(recordToSave).catch(console.error);
+    showNotification(`Justificativa de ausência registrada com sucesso para o dia ${data.date.split('-').reverse().join('/')}!`);
   };
 
   const addTimeRecordManual = (record: Omit<TimeClockRecord, 'id'>) => {
@@ -1780,6 +1878,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteDivision,
         timeRecords,
         punchClock,
+        justifyAbsence,
         updateTimeRecord,
         deleteTimeRecord,
         addTimeRecordManual,
