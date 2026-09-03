@@ -10,7 +10,8 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { OperatorProfileModal } from '../common/OperatorProfileModal';
 
@@ -178,66 +179,54 @@ export const ErpSidebar: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom Store Slogan, User Profile & mini status */}
-        <div className={`p-3 border-t border-slate-100 bg-slate-50/80 space-y-2.5 text-xs ${isSidebarCollapsed ? 'lg:p-2' : ''}`}>
+        {/* Bottom Area: User snippet, Company slogan & Deslogar button at the very bottom */}
+        <div className={`p-3 border-t border-slate-100 bg-slate-50/80 space-y-2 text-xs ${isSidebarCollapsed ? 'lg:p-2' : ''}`}>
           {currentUser && (
-            <div className={`p-2 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs gap-2 ${isSidebarCollapsed ? 'lg:p-1 lg:justify-center' : ''}`}>
-              <button
-                type="button"
-                onClick={() => setShowOperatorProfile(true)}
-                title="Clique para ver o perfil do operador"
-                className={`flex items-center gap-2 overflow-hidden text-left hover:bg-slate-50 p-1 rounded-lg transition-colors flex-1 cursor-pointer group ${isSidebarCollapsed ? 'lg:justify-center' : ''}`}
-              >
-                <div className="relative shrink-0">
-                  {currentUser.avatarUrl ? (
-                    <img
-                      src={currentUser.avatarUrl}
-                      alt={currentUser.name}
-                      className="w-7 h-7 rounded-full object-cover border border-orange-500 ring-1 ring-orange-200"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="text-base">{currentUser.avatar || '👤'}</span>
-                  )}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white"></span>
-                </div>
-                <div className={`flex flex-col text-left overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
-                  <span className="font-bold text-slate-800 text-xs truncate group-hover:text-orange-600">
-                    {currentUser.name}
-                  </span>
-                  <span className="text-[10px] uppercase font-semibold text-orange-600 truncate">
-                    {currentUser.role === 'superadmin' ? '👑 Super Admin' : currentUser.role === 'admin' ? 'Administrador' : `Op. #${currentUser.operatorNumber || '02'}`}
-                  </span>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  logout();
-                }}
-                title="Sair do Sistema"
-                className={`px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg flex items-center justify-center transition-colors shrink-0 cursor-pointer ${isSidebarCollapsed ? 'lg:hidden' : ''}`}
-              >
-                <span className="text-[10px] font-bold uppercase leading-none">SAIR</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowOperatorProfile(true)}
+              title="Clique para ver o perfil do operador"
+              className={`w-full p-2 bg-white border border-slate-200 hover:border-orange-300 rounded-xl flex items-center gap-2 shadow-2xs transition-colors cursor-pointer group ${isSidebarCollapsed ? 'lg:p-1 lg:justify-center' : ''}`}
+            >
+              <div className="relative shrink-0">
+                {currentUser.avatarUrl ? (
+                  <img
+                    src={currentUser.avatarUrl}
+                    alt={currentUser.name}
+                    className="w-7 h-7 rounded-full object-cover border border-orange-500 ring-1 ring-orange-200"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="text-base">{currentUser.avatar || '👤'}</span>
+                )}
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white"></span>
+              </div>
+              <div className={`flex flex-col text-left overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                <span className="font-bold text-slate-800 text-xs truncate group-hover:text-orange-600">
+                  {currentUser.name}
+                </span>
+                <span className="text-[10px] uppercase font-semibold text-orange-600 truncate">
+                  {currentUser.role === 'superadmin' ? '👑 Super Admin' : currentUser.role === 'admin' ? 'Administrador' : `Colaborador`}
+                </span>
+              </div>
+            </button>
           )}
 
-          <div className={`hidden lg:block ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
-            <div className="flex items-center gap-1.5 text-slate-700 font-semibold px-1">
-              <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-              <span className="truncate">{settings.name}</span>
-            </div>
-            <p className="text-[11px] text-slate-500 italic leading-snug px-1 truncate">
-              "{settings.slogan}"
-            </p>
-          </div>
-
-          {lowStockCount > 0 && !isSidebarCollapsed && (
-            <div className="p-2 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-2 text-orange-800 text-[11px]">
-              <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0" />
-              <span className="truncate">{lowStockCount} item(ns) em alerta.</span>
-            </div>
-          )}
+          {/* Deslogar button at the very bottom */}
+          <button
+            type="button"
+            id="btn-sidebar-logout"
+            onClick={() => {
+              logout();
+            }}
+            title="Deslogar do Sistema"
+            className={`w-full py-2.5 px-3 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all cursor-pointer shadow-2xs group ${isSidebarCollapsed ? 'lg:px-2' : ''}`}
+          >
+            <LogOut className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform shrink-0" />
+            <span className={`tracking-wide uppercase ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+              Deslogar
+            </span>
+          </button>
         </div>
 
         {/* Operator Profile Modal in ERP Sidebar */}

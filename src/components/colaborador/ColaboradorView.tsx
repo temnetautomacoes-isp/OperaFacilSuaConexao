@@ -42,7 +42,8 @@ import {
   Zap,
   Fingerprint,
   FileCheck,
-  CalendarClock
+  CalendarClock,
+  Menu
 } from 'lucide-react';
 import { BiometricSelfieModal } from '../common/BiometricSelfieModal';
 import { JustifyAbsenceModal } from './JustifyAbsenceModal';
@@ -66,11 +67,13 @@ export const ColaboradorView: React.FC = () => {
     punchClock, 
     updateEmployeeProfile, 
     settings, 
-    showNotification 
+    showNotification,
+    logout 
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<ColaboradorTab>('ponto');
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   
   // Ponto Form State
   const [selectedLocation, setSelectedLocation] = useState<string>('Sede Central NOC / Matriz');
@@ -305,87 +308,94 @@ export const ColaboradorView: React.FC = () => {
   const formattedDate = currentDateTime.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-100 overflow-y-auto antialiased">
+    <div className="flex-1 flex flex-col lg:flex-row bg-[#F8F9FF] text-slate-800 antialiased overflow-hidden select-none">
       
       {/* ========================================================================= */}
-      {/* 1. HERO HEADER & TAB SWITCHER */}
+      {/* 1. ABA LATERAL ESQUERDA DO COLABORADOR COM BOTÃO DESLOGAR NA PARTE INFERIOR */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 text-white px-4 sm:px-8 pt-6 pb-5 shadow-lg border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <aside className="w-full lg:w-64 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between shrink-0 shadow-xs">
+        
+        {/* Top Section / Navigation Tabs */}
+        <div className="p-4 space-y-3">
           
-          {/* Employee Welcome Card */}
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 border-2 border-orange-500 overflow-hidden shadow-md flex items-center justify-center shrink-0">
-                {currentUser?.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-2xl">{currentUser?.avatar || '👤'}</span>
-                )}
+          {/* Section Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                CL
               </div>
-              <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-xs" title="Online" />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  {currentUser?.name || 'Colaborador Provedor'}
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-orange-500 text-white tracking-wider shadow-xs">
-                  {currentUser?.registrationCode || 'COL-0428'}
-                </span>
+              <div>
+                <h3 className="font-extrabold text-xs text-slate-900 leading-none">Portal do Colaborador</h3>
+                <span className="text-[10px] text-slate-400 font-medium">Autoatendimento ISP</span>
               </div>
-              
-              <p className="text-xs sm:text-sm text-slate-300 font-medium flex items-center gap-1.5 mt-0.5">
-                <Briefcase className="w-3.5 h-3.5 text-orange-400" />
-                <span>{currentUser?.position || 'Analista de Suporte e Redes'}</span>
-                <span className="text-slate-500">•</span>
-                <span className="text-orange-300 font-bold">{currentUser?.department || 'Operações ISP'}</span>
-              </p>
             </div>
+            
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+              className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-lg"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Subheader Modern Tabs */}
-          <div className="flex items-center bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/80 shadow-inner self-start md:self-center flex-wrap gap-1">
+          {/* Navigation Buttons */}
+          <nav className={`space-y-1 ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
             <button
               type="button"
-              onClick={() => setActiveTab('ponto')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveTab('ponto');
+                setIsMobileNavOpen(false);
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'ponto'
-                  ? 'bg-orange-500 text-white shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <Clock className="w-4 h-4" />
-              <span>Bater Ponto</span>
+              <div className="flex items-center gap-2.5">
+                <Clock className={`w-4 h-4 ${activeTab === 'ponto' ? 'text-orange-500' : 'text-slate-400'}`} />
+                <span>Bater Ponto</span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab('folha')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveTab('folha');
+                setIsMobileNavOpen(false);
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'folha'
-                  ? 'bg-orange-500 text-white shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <FileText className="w-4 h-4" />
-              <span>Folha de Ponto</span>
+              <div className="flex items-center gap-2.5">
+                <FileText className={`w-4 h-4 ${activeTab === 'folha' ? 'text-orange-500' : 'text-slate-400'}`} />
+                <span>Folha de Ponto</span>
+              </div>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab('documentos')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveTab('documentos');
+                setIsMobileNavOpen(false);
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'documentos'
-                  ? 'bg-orange-500 text-white shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <FileCheck className="w-4 h-4" />
-              <span>Meus Documentos</span>
+              <div className="flex items-center gap-2.5">
+                <FileCheck className={`w-4 h-4 ${activeTab === 'documentos' ? 'text-orange-500' : 'text-slate-400'}`} />
+                <span>Meus Documentos</span>
+              </div>
               {myDocuments.length > 0 && (
-                <span className="text-[10px] bg-orange-600 text-white font-black px-1.5 py-0.2 rounded-full">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-800 border border-orange-300">
                   {myDocuments.length}
                 </span>
               )}
@@ -393,39 +403,78 @@ export const ColaboradorView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setActiveTab('perfil')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveTab('perfil');
+                setIsMobileNavOpen(false);
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'perfil'
-                  ? 'bg-orange-500 text-white shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <User className="w-4 h-4" />
-              <span>Meus Dados</span>
+              <div className="flex items-center gap-2.5">
+                <User className={`w-4 h-4 ${activeTab === 'perfil' ? 'text-orange-500' : 'text-slate-400'}`} />
+                <span>Meus Dados</span>
+              </div>
             </button>
-          </div>
+          </nav>
 
         </div>
-      </div>
+
+        {/* Bottom Area: Collaborator Card & Deslogar Button at the very bottom */}
+        <div className={`p-4 border-t border-slate-100 bg-slate-50/80 space-y-2.5 text-xs ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
+          {currentUser && (
+            <div className="p-2.5 bg-white border border-slate-200 rounded-2xl flex items-center gap-2.5 shadow-2xs">
+              <div className="w-8 h-8 rounded-full overflow-hidden p-0.5 bg-white border border-orange-400 shrink-0">
+                {currentUser.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  <span className="text-sm font-bold text-slate-700">{currentUser.avatar || '👤'}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="font-black text-slate-900 text-xs block truncate">{currentUser.name}</span>
+                <span className="text-[10px] text-orange-600 font-bold block truncate">{currentUser.position || 'Colaborador'}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Deslogar Button */}
+          <button
+            type="button"
+            id="btn-colaborador-logout"
+            onClick={() => {
+              logout();
+            }}
+            title="Deslogar do Sistema"
+            className="w-full py-2.5 px-3 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all cursor-pointer shadow-2xs group"
+          >
+            <LogOut className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform shrink-0" />
+            <span className="tracking-wide uppercase">Deslogar</span>
+          </button>
+        </div>
+
+      </aside>
 
       {/* ========================================================================= */}
-      {/* 2. MAIN CONTENT AREA */}
+      {/* 2. ÁREA DE CONTEÚDO PRINCIPAL (CLARA & ELEGANTE) */}
       {/* ========================================================================= */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* ======================================================================= */}
         {/* TAB 1: BATER PONTO ELETRÔNICO COM BIOMETRIA & DESIGN LÚDICO */}
         {/* ======================================================================= */}
         {activeTab === 'ponto' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto">
             
             {/* Top Clock Display Card with Action Buttons */}
-            <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-orange-400 relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
               
               <div className="space-y-2 relative z-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-orange-400 text-xs font-bold shadow-xs">
-                  <Activity className="w-3.5 h-3.5 animate-pulse" />
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white text-xs font-extrabold shadow-xs">
+                  <Activity className="w-3.5 h-3.5 animate-pulse text-white" />
                   <span>Relógio Oficial Sincronizado (Horário de Brasília)</span>
                 </div>
 
@@ -433,24 +482,24 @@ export const ColaboradorView: React.FC = () => {
                   {formattedTime}
                 </div>
 
-                <p className="text-xs sm:text-sm text-slate-300 font-medium capitalize">
+                <p className="text-xs sm:text-sm text-orange-100 font-bold capitalize">
                   {formattedDate}
                 </p>
               </div>
 
               {/* Status Indicator & Justify CTA */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10">
-                <div className="bg-slate-800/90 rounded-2xl p-4 sm:p-5 border border-slate-700 flex flex-col justify-between min-w-[220px]">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Hoje</span>
+                <div className="bg-white/15 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 flex flex-col justify-between min-w-[220px] text-white">
+                  <span className="text-[11px] font-bold text-orange-100 uppercase tracking-wider">Status Hoje</span>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`w-3 h-3 rounded-full ${
                       todayRecord?.exit2 
-                        ? 'bg-slate-400' 
+                        ? 'bg-slate-300' 
                         : todayRecord?.entry1 
-                        ? 'bg-emerald-500 animate-pulse' 
-                        : 'bg-orange-500'
+                        ? 'bg-emerald-300 animate-pulse' 
+                        : 'bg-white'
                     }`} />
-                    <span className="font-bold text-sm sm:text-base text-white">
+                    <span className="font-black text-sm sm:text-base text-white">
                       {todayRecord?.exit2
                         ? 'Jornada Encerrada'
                         : todayRecord?.entry2
@@ -463,9 +512,9 @@ export const ColaboradorView: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
+                  <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between text-xs text-orange-100">
                     <span>Horas Hoje:</span>
-                    <span className="font-mono font-bold text-orange-400">{todayRecord?.totalHours ? `${todayRecord.totalHours}h` : '0.0h'}</span>
+                    <span className="font-mono font-black text-white">{todayRecord?.totalHours ? `${todayRecord.totalHours}h` : '0.0h'}</span>
                   </div>
                 </div>
 
@@ -476,11 +525,11 @@ export const ColaboradorView: React.FC = () => {
                     setSelectedDateForJustify(todayStr);
                     setIsJustifyModalOpen(true);
                   }}
-                  className="px-5 py-4 bg-gradient-to-r from-slate-800 to-slate-750 hover:from-slate-750 hover:to-slate-700 border border-slate-700 rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 transition-all shadow-md group cursor-pointer hover:border-orange-500/50"
+                  className="px-5 py-4 bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 transition-all shadow-md group cursor-pointer text-white"
                 >
-                  <CalendarClock className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                  <CalendarClock className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
                   <span className="text-xs font-black text-white">Justificar Falta</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Anexar atestado / horas</span>
+                  <span className="text-[10px] text-orange-100 font-medium">Anexar atestado / horas</span>
                 </button>
               </div>
             </div>
@@ -758,7 +807,7 @@ export const ColaboradorView: React.FC = () => {
         {/* TAB 2: FOLHA DE PONTO / ESPELHO MENSAL */}
         {/* ======================================================================= */}
         {activeTab === 'folha' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto">
             
             {/* Header Controls */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -868,7 +917,7 @@ export const ColaboradorView: React.FC = () => {
                       <th className="py-3 px-3 text-center">Saída 1</th>
                       <th className="py-3 px-3 text-center">Entrada 2</th>
                       <th className="py-3 px-3 text-center">Saída 2</th>
-                      <th className="py-3 px-3 text-center">Total</th>
+                      <th className="py-3 px-4 text-center">Total</th>
                       <th className="py-3 px-3 text-center">Saldo</th>
                       <th className="py-3 px-4 text-center">Status</th>
                       <th className="py-3 px-3 text-center">Biometria</th>
@@ -916,7 +965,7 @@ export const ColaboradorView: React.FC = () => {
                             {item.record?.exit2 || '--:--'}
                           </td>
 
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-900">
+                          <td className="py-2.5 px-4 text-center font-mono font-bold text-slate-900">
                             {item.record?.totalHours ? `${item.record.totalHours}h` : '--'}
                           </td>
 
@@ -1013,7 +1062,7 @@ export const ColaboradorView: React.FC = () => {
         {/* TAB 3: MEUS DOCUMENTOS (CONTRATOS, ASO, TERMOS, CERTIFICADOS) */}
         {/* ======================================================================= */}
         {activeTab === 'documentos' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto">
             
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1128,7 +1177,7 @@ export const ColaboradorView: React.FC = () => {
         {/* TAB 4: MEUS DADOS & CADASTRO DO COLABORADOR */}
         {/* ======================================================================= */}
         {activeTab === 'perfil' && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto">
             
             {/* Header with edit trigger */}
             <div className="flex items-center justify-between">
@@ -1304,7 +1353,7 @@ export const ColaboradorView: React.FC = () => {
           </div>
         )}
 
-      </div>
+      </main>
 
       {/* ========================================================================= */}
       {/* MODAL: BIOMETRIC SELFIE CAMERA */}
