@@ -31,7 +31,7 @@ import {
   INITIAL_EMPLOYEE_DOCUMENTS,
   INITIAL_DIVISIONS
 } from '../data/initialData';
-import { safeSetItem } from '../utils/safeStorage';
+import { safeSetItem, sanitizeTimeRecordForStorage } from '../utils/safeStorage';
 import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 
