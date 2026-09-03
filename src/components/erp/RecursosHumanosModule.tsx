@@ -172,11 +172,15 @@ export const RecursosHumanosModule: React.FC = () => {
   const [punchAdjustReason, setPunchAdjustReason] = useState<string>('');
   const [isDeletePunchAction, setIsDeletePunchAction] = useState<boolean>(false);
 
-  const [isUploadDocModalOpen, setIsUploadDocModalOpen] = useState<boolean>(false);
-  const [previewDoc, setPreviewDoc] = useState<EmployeeDocument | null>(null);
-
   const [isPrintMirrorModalOpen, setIsPrintMirrorModalOpen] = useState<boolean>(false);
   const [printUserId, setPrintUserId] = useState<string>('');
+
+  // Detailed Day Record Pop-up Modal State
+  const [selectedTimeRecordForDetail, setSelectedTimeRecordForDetail] = useState<TimeClockRecord | null>(null);
+  
+  // Delete Day Record with Mandatory Justification State
+  const [recordToDeleteWithReason, setRecordToDeleteWithReason] = useState<TimeClockRecord | null>(null);
+  const [deleteDayReason, setDeleteDayReason] = useState<string>('');
 
   // Form states
   const [userFormData, setUserFormData] = useState<Partial<UserAccount>>({
@@ -556,6 +560,25 @@ export const RecursosHumanosModule: React.FC = () => {
       fileSize: '',
       fileUrl: ''
     });
+  };
+
+  // Handle Confirm Deletion of Daily Time Record with Mandatory Justification
+  const handleConfirmDeleteDayWithReason = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordToDeleteWithReason) return;
+
+    if (!deleteDayReason.trim()) {
+      showNotification('Por favor, informe a justificativa formal para a exclusão deste registro.');
+      return;
+    }
+
+    const rec = recordToDeleteWithReason;
+    deleteTimeRecord(rec.id);
+    showNotification(`Registro de ponto do dia ${rec.date.split('-').reverse().join('/')} (${rec.userName}) excluído com sucesso. Motivo documentado formalmente.`);
+    
+    setRecordToDeleteWithReason(null);
+    setDeleteDayReason('');
+    setSelectedTimeRecordForDetail(null);
   };
 
   return (
@@ -1193,7 +1216,10 @@ export const RecursosHumanosModule: React.FC = () => {
 
                         return (
                           <div
-                            onClick={() => handleOpenAdjustPunch(r, field)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAdjustPunch(r, field);
+                            }}
                             className={`group/slot relative px-2 py-1 rounded-lg font-mono font-bold text-center cursor-pointer transition-all border ${
                               hasFieldAdjustment 
                                 ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100' 
@@ -1212,7 +1238,12 @@ export const RecursosHumanosModule: React.FC = () => {
                       };
 
                       return (
-                        <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
+                        <tr 
+                          key={r.id} 
+                          onClick={() => setSelectedTimeRecordForDetail(r)}
+                          className="hover:bg-orange-50/60 cursor-pointer transition-colors group"
+                          title="Clique em qualquer lugar da linha para abrir o dossiê completo deste registro de ponto"
+                        >
                           <td className="py-3 px-4 font-bold text-slate-900">
                             <div>{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
                             <span className="text-[10px] text-slate-400 uppercase font-semibold">{dayOfWeek}</span>
@@ -1308,7 +1339,7 @@ export const RecursosHumanosModule: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
                                 title="Ajustar / Excluir Horários com Observação"
@@ -1321,11 +1352,10 @@ export const RecursosHumanosModule: React.FC = () => {
 
                               <button
                                 type="button"
-                                title="Remover Dia de Ponto"
+                                title="Excluir Registro do Dia com Justificativa"
                                 onClick={() => {
-                                  if (confirm(`Remover todo o registro de ponto do dia ${r.date}?`)) {
-                                    deleteTimeRecord(r.id);
-                                  }
+                                  setRecordToDeleteWithReason(r);
+                                  setDeleteDayReason('');
                                 }}
                                 className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors cursor-pointer"
                               >
@@ -4181,6 +4211,525 @@ export const RecursosHumanosModule: React.FC = () => {
                 Fechar Visualização
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 18. MODAL: DETALHES COMPLETOS DO REGISTRO DE PONTO DIÁRIO (DOSSIÊ DO PONTO) */}
+      {/* ========================================================================= */}
+      {selectedTimeRecordForDetail && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            
+            {/* Modal Header */}
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white font-black text-xl flex items-center justify-center shadow-md">
+                  {selectedTimeRecordForDetail.userName.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg sm:text-xl font-black text-white">
+                      {selectedTimeRecordForDetail.userName}
+                    </h2>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase border ${
+                      selectedTimeRecordForDetail.status === 'justificado'
+                        ? 'bg-purple-900/60 text-purple-300 border-purple-700'
+                        : selectedTimeRecordForDetail.status === 'extra'
+                        ? 'bg-orange-900/60 text-orange-300 border-orange-700'
+                        : selectedTimeRecordForDetail.status === 'atraso'
+                        ? 'bg-rose-900/60 text-rose-300 border-rose-700'
+                        : 'bg-emerald-900/60 text-emerald-300 border-emerald-700'
+                    }`}>
+                      {selectedTimeRecordForDetail.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-orange-400" />
+                    <span>
+                      {new Date(selectedTimeRecordForDetail.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rec = selectedTimeRecordForDetail;
+                    setSelectedTimeRecordForDetail(null);
+                    handleOpenAdjustPunch(rec, 'entry1');
+                  }}
+                  className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Ajustar Horários</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTimeRecordForDetail(null)}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-800">
+              
+              {/* The 4 Punch Slots with Biometric Photo and GPS */}
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 mb-3 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-orange-500" />
+                  <span>Jornada Diária &bull; 4 Batidas Oficiais</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  
+                  {/* Punch 1: Entrada 1 */}
+                  {(() => {
+                    const punch = selectedTimeRecordForDetail.entry1;
+                    const selfie = selectedTimeRecordForDetail.selfies?.entry1;
+                    const geo = selectedTimeRecordForDetail.geolocations?.entry1;
+                    const hasAdj = selectedTimeRecordForDetail.adjustments?.some((a) => a.field === 'entry1');
+
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all ${punch ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-200'} space-y-3 flex flex-col justify-between`}>
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
+                            <span>1º Turno</span>
+                            {hasAdj && <span className="text-amber-600 bg-amber-100 px-1.5 rounded">Ajustado</span>}
+                          </div>
+                          <span className="font-extrabold text-sm text-slate-900 block mt-0.5">Entrada</span>
+                          <div className="font-mono text-xl font-black text-slate-900 mt-1">
+                            {punch || '--:--'}
+                          </div>
+                        </div>
+
+                        {/* Selfie & GPS Tags */}
+                        <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                          {selfie ? (
+                            <div 
+                              onClick={() => setPreviewSelfie({
+                                url: selfie,
+                                title: `Selfie Biométrica — Entrada (${selectedTimeRecordForDetail.userName})`,
+                                userName: selectedTimeRecordForDetail.userName,
+                                date: selectedTimeRecordForDetail.date,
+                                time: punch,
+                                location: selectedTimeRecordForDetail.location,
+                                geo
+                              })}
+                              className="group cursor-pointer relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-300"
+                            >
+                              <img src={selfie} alt="Selfie Entrada" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                                <Eye className="w-3.5 h-3.5" /> Ampliar
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">Sem selfie anexada</span>
+                          )}
+
+                          {geo && (
+                            <a
+                              href={geo.mapUrl || `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg border border-emerald-200 font-bold flex items-center justify-between transition-colors"
+                            >
+                              <span className="flex items-center gap-1">
+                                <Navigation className="w-3 h-3 text-emerald-600" />
+                                <span>{geo.latitude}, {geo.longitude}</span>
+                              </span>
+                              <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Punch 2: Saída 1 Almoço */}
+                  {(() => {
+                    const punch = selectedTimeRecordForDetail.exit1;
+                    const selfie = selectedTimeRecordForDetail.selfies?.exit1;
+                    const geo = selectedTimeRecordForDetail.geolocations?.exit1;
+                    const hasAdj = selectedTimeRecordForDetail.adjustments?.some((a) => a.field === 'exit1');
+
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all ${punch ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-200'} space-y-3 flex flex-col justify-between`}>
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
+                            <span>Intervalo</span>
+                            {hasAdj && <span className="text-amber-600 bg-amber-100 px-1.5 rounded">Ajustado</span>}
+                          </div>
+                          <span className="font-extrabold text-sm text-slate-900 block mt-0.5">Saída Almoço</span>
+                          <div className="font-mono text-xl font-black text-slate-900 mt-1">
+                            {punch || '--:--'}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                          {selfie ? (
+                            <div 
+                              onClick={() => setPreviewSelfie({
+                                url: selfie,
+                                title: `Selfie Biométrica — Saída Almoço (${selectedTimeRecordForDetail.userName})`,
+                                userName: selectedTimeRecordForDetail.userName,
+                                date: selectedTimeRecordForDetail.date,
+                                time: punch,
+                                location: selectedTimeRecordForDetail.location,
+                                geo
+                              })}
+                              className="group cursor-pointer relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-300"
+                            >
+                              <img src={selfie} alt="Selfie Saída Almoço" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                                <Eye className="w-3.5 h-3.5" /> Ampliar
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">Sem selfie anexada</span>
+                          )}
+
+                          {geo && (
+                            <a
+                              href={geo.mapUrl || `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg border border-emerald-200 font-bold flex items-center justify-between transition-colors"
+                            >
+                              <span className="flex items-center gap-1">
+                                <Navigation className="w-3 h-3 text-emerald-600" />
+                                <span>{geo.latitude}, {geo.longitude}</span>
+                              </span>
+                              <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Punch 3: Retorno 2 Almoço */}
+                  {(() => {
+                    const punch = selectedTimeRecordForDetail.entry2;
+                    const selfie = selectedTimeRecordForDetail.selfies?.entry2;
+                    const geo = selectedTimeRecordForDetail.geolocations?.entry2;
+                    const hasAdj = selectedTimeRecordForDetail.adjustments?.some((a) => a.field === 'entry2');
+
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all ${punch ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-200'} space-y-3 flex flex-col justify-between`}>
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
+                            <span>2º Turno</span>
+                            {hasAdj && <span className="text-amber-600 bg-amber-100 px-1.5 rounded">Ajustado</span>}
+                          </div>
+                          <span className="font-extrabold text-sm text-slate-900 block mt-0.5">Retorno Almoço</span>
+                          <div className="font-mono text-xl font-black text-slate-900 mt-1">
+                            {punch || '--:--'}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                          {selfie ? (
+                            <div 
+                              onClick={() => setPreviewSelfie({
+                                url: selfie,
+                                title: `Selfie Biométrica — Retorno Almoço (${selectedTimeRecordForDetail.userName})`,
+                                userName: selectedTimeRecordForDetail.userName,
+                                date: selectedTimeRecordForDetail.date,
+                                time: punch,
+                                location: selectedTimeRecordForDetail.location,
+                                geo
+                              })}
+                              className="group cursor-pointer relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-300"
+                            >
+                              <img src={selfie} alt="Selfie Retorno Almoço" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                                <Eye className="w-3.5 h-3.5" /> Ampliar
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">Sem selfie anexada</span>
+                          )}
+
+                          {geo && (
+                            <a
+                              href={geo.mapUrl || `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg border border-emerald-200 font-bold flex items-center justify-between transition-colors"
+                            >
+                              <span className="flex items-center gap-1">
+                                <Navigation className="w-3 h-3 text-emerald-600" />
+                                <span>{geo.latitude}, {geo.longitude}</span>
+                              </span>
+                              <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Punch 4: Saída 2 Expediente */}
+                  {(() => {
+                    const punch = selectedTimeRecordForDetail.exit2;
+                    const selfie = selectedTimeRecordForDetail.selfies?.exit2;
+                    const geo = selectedTimeRecordForDetail.geolocations?.exit2;
+                    const hasAdj = selectedTimeRecordForDetail.adjustments?.some((a) => a.field === 'exit2');
+
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all ${punch ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-200'} space-y-3 flex flex-col justify-between`}>
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
+                            <span>Encerramento</span>
+                            {hasAdj && <span className="text-amber-600 bg-amber-100 px-1.5 rounded">Ajustado</span>}
+                          </div>
+                          <span className="font-extrabold text-sm text-slate-900 block mt-0.5">Saída Final</span>
+                          <div className="font-mono text-xl font-black text-slate-900 mt-1">
+                            {punch || '--:--'}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                          {selfie ? (
+                            <div 
+                              onClick={() => setPreviewSelfie({
+                                url: selfie,
+                                title: `Selfie Biométrica — Saída Final (${selectedTimeRecordForDetail.userName})`,
+                                userName: selectedTimeRecordForDetail.userName,
+                                date: selectedTimeRecordForDetail.date,
+                                time: punch,
+                                location: selectedTimeRecordForDetail.location,
+                                geo
+                              })}
+                              className="group cursor-pointer relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-300"
+                            >
+                              <img src={selfie} alt="Selfie Saída Final" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                                <Eye className="w-3.5 h-3.5" /> Ampliar
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">Sem selfie anexada</span>
+                          )}
+
+                          {geo && (
+                            <a
+                              href={geo.mapUrl || `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg border border-emerald-200 font-bold flex items-center justify-between transition-colors"
+                            >
+                              <span className="flex items-center gap-1">
+                                <Navigation className="w-3 h-3 text-emerald-600" />
+                                <span>{geo.latitude}, {geo.longitude}</span>
+                              </span>
+                              <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              </div>
+
+              {/* Day Calculations & Metadata */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Horas Trabalhadas:</span>
+                  <span className="text-base font-black text-slate-900 font-mono">{selectedTimeRecordForDetail.totalHours ? `${selectedTimeRecordForDetail.totalHours} hrs` : '--'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Saldo Horas Extras / Banco:</span>
+                  <span className={`text-base font-black font-mono ${(selectedTimeRecordForDetail.extraHours || 0) >= 0 ? 'text-orange-600' : 'text-rose-600'}`}>
+                    {(selectedTimeRecordForDetail.extraHours || 0) > 0 ? `+${selectedTimeRecordForDetail.extraHours}h` : `${selectedTimeRecordForDetail.extraHours || 0}h`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Unidade / Local:</span>
+                  <span className="font-bold text-slate-800">{selectedTimeRecordForDetail.location || 'Sede Central'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Dispositivo / Terminal:</span>
+                  <span className="font-bold text-slate-800">{selectedTimeRecordForDetail.deviceInfo || 'Terminal Web Corporativo'}</span>
+                </div>
+              </div>
+
+              {/* Justification / Certificate Card (if present) */}
+              {selectedTimeRecordForDetail.justification && (
+                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-purple-900 text-xs flex items-center gap-1.5">
+                      <FileCheck className="w-4 h-4 text-purple-600" />
+                      Justificativa de Falta / Ausência Anexada
+                    </span>
+                    <span className="bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full text-[10px]">
+                      {selectedTimeRecordForDetail.justification.isFullDay ? 'Dia Inteiro' : `${selectedTimeRecordForDetail.justification.startTime} às ${selectedTimeRecordForDetail.justification.endTime}`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-purple-950 font-medium bg-white/80 p-2.5 rounded-xl border border-purple-100">
+                    "{selectedTimeRecordForDetail.justification.reason}"
+                  </p>
+                  {selectedTimeRecordForDetail.justification.documentUrl && (
+                    <div className="pt-1 flex items-center justify-between">
+                      <span className="font-bold text-purple-800 text-xs flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5 text-purple-600" />
+                        {selectedTimeRecordForDetail.justification.documentName || 'Atestado_Medico.pdf'}
+                      </span>
+                      <a
+                        href={selectedTimeRecordForDetail.justification.documentUrl}
+                        download={selectedTimeRecordForDetail.justification.documentName || 'atestado.pdf'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs"
+                      >
+                        <Download className="w-3 h-3" /> Baixar Documento
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Audit Trail & Adjustments History */}
+              {selectedTimeRecordForDetail.adjustments && selectedTimeRecordForDetail.adjustments.length > 0 && (
+                <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-3">
+                  <h4 className="font-extrabold text-xs text-amber-950 flex items-center gap-1.5">
+                    <History className="w-4 h-4 text-amber-700" />
+                    <span>Histórico de Auditoria & Alterações Legais ({selectedTimeRecordForDetail.adjustments.length})</span>
+                  </h4>
+
+                  <div className="space-y-2">
+                    {selectedTimeRecordForDetail.adjustments.map((log) => (
+                      <div key={log.id} className="p-2.5 bg-white rounded-xl border border-amber-200/80 text-[11px] space-y-1">
+                        <div className="flex justify-between items-center text-slate-500">
+                          <span className="font-bold text-amber-900">{log.fieldLabel} &bull; {log.action === 'delete' ? 'Exclusão' : 'Edição'}</span>
+                          <span className="font-mono text-[10px]">{new Date(log.adjustedAt).toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="text-slate-700">
+                          Valor Anterior: <span className="font-mono line-through text-slate-400">{log.previousValue}</span> &rarr; Novo: <strong className="font-mono text-slate-900">{log.newValue}</strong>
+                        </div>
+                        <div className="text-slate-600 italic bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                          Motivo: "{log.reason}" &bull; Alterado por: <strong>{log.adjustedBy}</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const rec = selectedTimeRecordForDetail;
+                  setRecordToDeleteWithReason(rec);
+                  setDeleteDayReason('');
+                }}
+                className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Excluir Registro do Dia (com Justificativa)</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTimeRecordForDetail(null)}
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 19. MODAL: EXCLUSÃO DO REGISTRO DO DIA COM JUSTIFICATIVA OBRIGATÓRIA */}
+      {/* ========================================================================= */}
+      {recordToDeleteWithReason && (
+        <div className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            
+            {/* Header */}
+            <div className="p-5 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="font-extrabold text-base">Excluir Registro de Ponto Diário</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordToDeleteWithReason(null)}
+                className="p-1 rounded-xl bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDeleteDayWithReason} className="p-6 space-y-4 text-xs">
+              <div className="p-3 bg-rose-50 rounded-2xl border border-rose-200 text-rose-900 space-y-1">
+                <p className="font-bold flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  Atenção: Exclusão Formal de Ponto
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Você está solicitando a anulação do espelho de ponto de <strong>{recordToDeleteWithReason.userName}</strong> no dia <strong>{new Date(recordToDeleteWithReason.date + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>.
+                  Para fins legais e de compliance trabalhista, a justificativa formal é obrigatória.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>Motivo / Justificativa da Exclusão * (Obrigatório)</span>
+                  <span className="text-[10px] text-rose-600 font-semibold">Exigência Legal</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Ex: Registro efetuado indevidamente em dia de escala de folga / Duplicidade autorizada pelo RH..."
+                  value={deleteDayReason}
+                  onChange={(e) => setDeleteDayReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-rose-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600">
+                Responsável pela Anulação: <strong>{currentUser?.name || 'Gestor de RH'}</strong> em {new Date().toLocaleString('pt-BR')}.
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setRecordToDeleteWithReason(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!deleteDayReason.trim()}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Confirmar Exclusão com Justificativa</span>
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}
