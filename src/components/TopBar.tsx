@@ -44,7 +44,7 @@ export const TopBar: React.FC = () => {
   });
 
   return (
-    <header className="bg-white/95 backdrop-blur-md text-slate-800 shadow-xs sticky top-0 z-[100] px-4 py-2.5 flex items-center justify-between border-b border-slate-200/90 transition-all select-none">
+    <header className="bg-white/95 backdrop-blur-md text-slate-800 shadow-xs sticky top-0 z-20 px-4 py-2.5 flex items-center justify-between border-b border-slate-200/90 transition-all select-none">
       
       {/* ======================================================================= */}
       {/* 1. CANTO SUPERIOR ESQUERDO: SOMENTE A LOGO DA EMPRESA (INTERATIVA) */}
