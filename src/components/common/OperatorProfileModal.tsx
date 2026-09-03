@@ -109,11 +109,11 @@ export const OperatorProfileModal: React.FC<OperatorProfileModalProps> = ({ isOp
       <div
         id="operator-profile-backdrop"
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] animate-in fade-in duration-150"
+        className="fixed inset-0 z-[9998] bg-black/25 backdrop-blur-[2px] animate-in fade-in duration-150"
       />
 
       {/* Pop-up Container anchored at Top-Right near the user avatar */}
-      <div className="fixed top-14 right-3 sm:right-4 z-50 pointer-events-auto">
+      <div className="fixed top-14 right-3 sm:right-4 z-[9999] pointer-events-auto">
         <div
           ref={modalRef}
           id="operator-profile-card"

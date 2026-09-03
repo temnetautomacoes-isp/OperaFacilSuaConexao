@@ -76,7 +76,7 @@ export const ErpSidebar: React.FC = () => {
       {/* Sidebar Container (Responsive: Drawer on Mobile, Expandable/Collapsible on Desktop) */}
       <aside 
         className={`
-          fixed lg:static inset-y-0 left-0 z-50
+          fixed lg:static inset-y-0 left-0 z-30 lg:z-auto
           bg-white border-r border-slate-200 flex flex-col justify-between h-full shadow-lg lg:shadow-xs shrink-0
           transition-all duration-300 ease-in-out
           ${isMobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'}

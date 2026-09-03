@@ -60,11 +60,11 @@ export const CompanyInfoModal: React.FC<CompanyInfoModalProps> = ({
       {/* Invisible/Soft Backdrop for click-outside dismissal */}
       <div 
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] animate-in fade-in duration-150"
+        className="fixed inset-0 z-[9998] bg-black/25 backdrop-blur-[2px] animate-in fade-in duration-150"
       />
 
       {/* Pop-up Container anchored at Top-Left near the company logo */}
-      <div className="fixed top-14 left-3 sm:left-4 z-50 pointer-events-auto">
+      <div className="fixed top-14 left-3 sm:left-4 z-[9999] pointer-events-auto">
         <div 
           ref={popoverRef}
           className="w-[320px] sm:w-[380px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden text-slate-800 origin-top-left animate-in fade-in-0 zoom-in-90 slide-in-from-top-2 duration-200 ease-out"
