@@ -300,6 +300,12 @@ export const supabaseService = {
       selfies: r.selfies || undefined,
       geolocations: r.geolocations || undefined,
       justification: r.justification || undefined,
+      adjustments: r.adjustments || undefined,
+      deviceInfo: r.device_info || undefined,
+      isDeleted: Boolean(r.is_deleted),
+      deletedAt: r.deleted_at || undefined,
+      deletedBy: r.deleted_by || undefined,
+      deletedReason: r.deleted_reason || undefined,
     }));
   },
 
@@ -321,6 +327,12 @@ export const supabaseService = {
       selfies: rec.selfies || null,
       geolocations: rec.geolocations || null,
       justification: rec.justification || null,
+      adjustments: rec.adjustments || null,
+      device_info: rec.deviceInfo || null,
+      is_deleted: rec.isDeleted ?? false,
+      deleted_at: rec.deletedAt || null,
+      deleted_by: rec.deletedBy || null,
+      deleted_reason: rec.deletedReason || null,
     }, { onConflict: 'id' });
 
     if (error) {

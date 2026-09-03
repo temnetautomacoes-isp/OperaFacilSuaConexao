@@ -81,6 +81,9 @@ interface AppContextType {
   }) => void;
   updateTimeRecord: (id: string, updated: Partial<TimeClockRecord>) => void;
   deleteTimeRecord: (id: string) => void;
+  deleteTimeRecordWithReason: (id: string, reason: string) => void;
+  restoreTimeRecord: (id: string) => void;
+  permanentDeleteTimeRecord: (id: string) => void;
   addTimeRecordManual: (record: Omit<TimeClockRecord, 'id'>) => void;
   adjustTimePunch: (recordId: string, punchField: TimeClockPunchType, newValue: string | undefined, reason: string) => void;
   getTimeRecordForToday: (userId?: string) => TimeClockRecord | undefined;
@@ -1860,13 +1863,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTimeRecord = (id: string) => {
+    deleteTimeRecordWithReason(id, 'Exclusão solicitada pelo gestor de RH');
+  };
+
+  const deleteTimeRecordWithReason = (id: string, reason: string) => {
+    const target = timeRecords.find((r) => r.id === id);
+    if (!target) return;
+
+    const log: TimeClockAdjustmentLog = {
+      id: `del-${Date.now()}`,
+      field: 'entry1',
+      fieldLabel: 'Registro Diário Completo',
+      action: 'delete',
+      previousValue: `Horários: ${target.entry1 || '--'} / ${target.exit1 || '--'} / ${target.entry2 || '--'} / ${target.exit2 || '--'}`,
+      newValue: '(Anulado / Arquivado em Registros Deletados)',
+      reason: reason.trim() || 'Exclusão formal do registro diário',
+      adjustedBy: currentUser?.name || 'Gestor de RH',
+      adjustedAt: new Date().toISOString()
+    };
+
+    const updatedRecord: TimeClockRecord = {
+      ...target,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: currentUser?.name || 'Gestor de RH',
+      deletedReason: reason.trim(),
+      adjustments: [log, ...(target.adjustments || [])]
+    };
+
+    setTimeRecords((prev) => {
+      const updated = prev.map((r) => (r.id === id ? updatedRecord : r));
+      safeSetItem('operafacil_time_records', updated.map(sanitizeTimeRecordForStorage));
+      return updated;
+    });
+
+    supabaseService.saveTimeRecord(updatedRecord).catch(console.error);
+    showNotification(`Registro arquivado em "Registros Deletados" com justificativa formal documentada.`);
+  };
+
+  const restoreTimeRecord = (id: string) => {
+    const target = timeRecords.find((r) => r.id === id);
+    if (!target) return;
+
+    const log: TimeClockAdjustmentLog = {
+      id: `res-${Date.now()}`,
+      field: 'entry1',
+      fieldLabel: 'Registro Diário Completo',
+      action: 'create',
+      previousValue: '(Anulado / Deletado)',
+      newValue: `Restaurado (${target.entry1 || '--'} / ${target.exit1 || '--'} / ${target.entry2 || '--'} / ${target.exit2 || '--'})`,
+      reason: 'Registro de ponto restaurado para a folha ativa pelo gestor',
+      adjustedBy: currentUser?.name || 'Gestor de RH',
+      adjustedAt: new Date().toISOString()
+    };
+
+    const updatedRecord: TimeClockRecord = {
+      ...target,
+      isDeleted: false,
+      deletedAt: undefined,
+      deletedBy: undefined,
+      deletedReason: undefined,
+      adjustments: [log, ...(target.adjustments || [])]
+    };
+
+    setTimeRecords((prev) => {
+      const updated = prev.map((r) => (r.id === id ? updatedRecord : r));
+      safeSetItem('operafacil_time_records', updated.map(sanitizeTimeRecordForStorage));
+      return updated;
+    });
+
+    supabaseService.saveTimeRecord(updatedRecord).catch(console.error);
+    showNotification(`Registro de ponto do dia ${target.date.split('-').reverse().join('/')} restaurado para a folha ativa.`);
+  };
+
+  const permanentDeleteTimeRecord = (id: string) => {
     setTimeRecords((prev) => {
       const filtered = prev.filter((r) => r.id !== id);
-      safeSetItem('operafacil_time_records', filtered);
+      safeSetItem('operafacil_time_records', filtered.map(sanitizeTimeRecordForStorage));
       return filtered;
     });
     supabaseService.deleteTimeRecord(id).catch(console.error);
-    showNotification('Registro de ponto removido.');
+    showNotification('Registro de ponto excluído permanentemente.');
   };
 
   const updateEmployeeProfile = (userId: string, updated: Partial<UserAccount>) => {
@@ -1927,6 +2004,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         justifyAbsence,
         updateTimeRecord,
         deleteTimeRecord,
+        deleteTimeRecordWithReason,
+        restoreTimeRecord,
+        permanentDeleteTimeRecord,
         addTimeRecordManual,
         adjustTimePunch,
         getTimeRecordForToday,

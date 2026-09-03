@@ -68,7 +68,9 @@ import {
   Workflow,
   Sparkle,
   Move,
-  Navigation
+  Navigation,
+  RotateCcw,
+  Archive
 } from 'lucide-react';
 
 type RhTab = 'colaboradores' | 'folha_ponto' | 'documentos' | 'visao_geral';
@@ -125,6 +127,9 @@ export const RecursosHumanosModule: React.FC = () => {
     adjustTimePunch,
     updateTimeRecord, 
     deleteTimeRecord,
+    deleteTimeRecordWithReason,
+    restoreTimeRecord,
+    permanentDeleteTimeRecord,
     employeeDocuments, 
     addEmployeeDocument, 
     deleteEmployeeDocument, 
@@ -134,6 +139,7 @@ export const RecursosHumanosModule: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<RhTab>('colaboradores');
+  const [pontoSubTab, setPontoSubTab] = useState<'ativos' | 'deletados'>('ativos');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('todos');
 
@@ -322,9 +328,10 @@ export const RecursosHumanosModule: React.FC = () => {
     });
   }, [users, searchTerm, selectedDepartment]);
 
-  // Filtered Time Records
-  const filteredTimeRecords = useMemo(() => {
+  // Filtered Active Time Records
+  const filteredActiveTimeRecords = useMemo(() => {
     return timeRecords.filter((r) => {
+      if (r.isDeleted) return false;
       const rDate = new Date(r.date + 'T00:00:00');
       const matchUser = pontoUserId === 'todos' || r.userId === pontoUserId;
       const matchMonth = rDate.getMonth() === pontoMonth;
@@ -334,13 +341,29 @@ export const RecursosHumanosModule: React.FC = () => {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [timeRecords, pontoUserId, pontoMonth, pontoYear, pontoStatusFilter]);
 
-  // Totals for the selected month/user in Folha de Ponto
+  // Filtered Deleted Time Records (Audit History)
+  const filteredDeletedTimeRecords = useMemo(() => {
+    return timeRecords.filter((r) => {
+      if (!r.isDeleted) return false;
+      const rDate = new Date(r.date + 'T00:00:00');
+      const matchUser = pontoUserId === 'todos' || r.userId === pontoUserId;
+      const matchMonth = rDate.getMonth() === pontoMonth;
+      const matchYear = rDate.getFullYear() === pontoYear;
+      return matchUser && matchMonth && matchYear;
+    }).sort((a, b) => (b.deletedAt || b.date).localeCompare(a.deletedAt || a.date));
+  }, [timeRecords, pontoUserId, pontoMonth, pontoYear]);
+
+  const totalDeletedCount = useMemo(() => {
+    return timeRecords.filter((r) => r.isDeleted).length;
+  }, [timeRecords]);
+
+  // Totals for the selected month/user in Folha de Ponto (Active only)
   const monthStats = useMemo(() => {
     let totalHours = 0;
     let totalExtra = 0;
-    let daysWorked = filteredTimeRecords.length;
+    let daysWorked = filteredActiveTimeRecords.length;
 
-    filteredTimeRecords.forEach((r) => {
+    filteredActiveTimeRecords.forEach((r) => {
       totalHours += r.totalHours || 0;
       totalExtra += r.extraHours || 0;
     });
@@ -350,7 +373,7 @@ export const RecursosHumanosModule: React.FC = () => {
       totalExtra: Number(totalExtra.toFixed(2)),
       daysWorked
     };
-  }, [filteredTimeRecords]);
+  }, [filteredActiveTimeRecords]);
 
   // Filtered Documents
   const filteredDocuments = useMemo(() => {
@@ -575,8 +598,7 @@ export const RecursosHumanosModule: React.FC = () => {
     }
 
     const rec = recordToDeleteWithReason;
-    deleteTimeRecord(rec.id);
-    showNotification(`Registro de ponto do dia ${rec.date.split('-').reverse().join('/')} (${rec.userName}) excluído com sucesso. Motivo documentado formalmente.`);
+    deleteTimeRecordWithReason(rec.id, deleteDayReason.trim());
     
     setRecordToDeleteWithReason(null);
     setDeleteDayReason('');
@@ -1162,217 +1184,416 @@ export const RecursosHumanosModule: React.FC = () => {
             </div>
           </div>
 
-          {/* Detailed Ponto Records Table with Punch Adjustment Triggers */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  Batidas e Apuração de Ponto &bull; {MONTH_NAMES[pontoMonth]} de {pontoYear}
-                  <span className="text-[11px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                    Clique em qualquer horário para ajustar ou excluir com observação
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Registros eletrônicos auditáveis com notas de alterações e justificativas legais documentadas pelo RH.
-                </p>
+          {/* Subtabs: Registros Ativos vs Registros Deletados */}
+          <div className="flex items-center gap-2 border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setPontoSubTab('ativos')}
+              className={`px-4 py-2.5 font-extrabold text-xs rounded-t-xl transition-all cursor-pointer flex items-center gap-2 border-b-2 ${
+                pontoSubTab === 'ativos'
+                  ? 'bg-white text-orange-600 border-orange-500 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 border-transparent hover:bg-slate-100/60'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Registros Ativos</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-orange-100 text-orange-800 font-bold">
+                {filteredActiveTimeRecords.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPontoSubTab('deletados')}
+              className={`px-4 py-2.5 font-extrabold text-xs rounded-t-xl transition-all cursor-pointer flex items-center gap-2 border-b-2 ${
+                pontoSubTab === 'deletados'
+                  ? 'bg-white text-rose-600 border-rose-500 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 border-transparent hover:bg-slate-100/60'
+              }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Registros Deletados</span>
+              {totalDeletedCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-bold">
+                  {totalDeletedCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* TAB CONTENT 1: REGISTROS ATIVOS */}
+          {pontoSubTab === 'ativos' && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-150">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    Batidas e Apuração de Ponto &bull; {MONTH_NAMES[pontoMonth]} de {pontoYear}
+                    <span className="text-[11px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                      Clique em qualquer horário para ajustar ou excluir com observação
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Registros eletrônicos auditáveis com notas de alterações e justificativas legais documentadas pelo RH.
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Data</th>
-                    <th className="py-3 px-4">Colaborador</th>
-                    <th className="py-3 px-3 text-center">Entrada 1</th>
-                    <th className="py-3 px-3 text-center">Saída 1 (Almoço)</th>
-                    <th className="py-3 px-3 text-center">Retorno 2</th>
-                    <th className="py-3 px-3 text-center">Saída 2</th>
-                    <th className="py-3 px-4 text-center">Total Horas</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-3 text-center">Biometria</th>
-                    <th className="py-3 px-4 text-center">Auditoria</th>
-                    <th className="py-3 px-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredTimeRecords.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
-                        <Clock className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                        Nenhum registro de ponto localizado para os filtros selecionados.
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Colaborador</th>
+                      <th className="py-3 px-3 text-center">Entrada 1</th>
+                      <th className="py-3 px-3 text-center">Saída 1 (Almoço)</th>
+                      <th className="py-3 px-3 text-center">Retorno 2</th>
+                      <th className="py-3 px-3 text-center">Saída 2</th>
+                      <th className="py-3 px-4 text-center">Total Horas</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-3 text-center">Biometria</th>
+                      <th className="py-3 px-4 text-center">Auditoria</th>
+                      <th className="py-3 px-4 text-right">Ações</th>
                     </tr>
-                  ) : (
-                    filteredTimeRecords.map((r) => {
-                      const dateObj = new Date(r.date + 'T00:00:00');
-                      const dayOfWeek = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' });
-                      const adjustmentsCount = r.adjustments?.length || 0;
-                      const hasSelfies = r.selfies && Object.keys(r.selfies).length > 0;
-                      const hasJustification = Boolean(r.justification);
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {filteredActiveTimeRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
+                          <Clock className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                          Nenhum registro de ponto ativo localizado para os filtros selecionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredActiveTimeRecords.map((r) => {
+                        const dateObj = new Date(r.date + 'T00:00:00');
+                        const dayOfWeek = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' });
+                        const adjustmentsCount = r.adjustments?.length || 0;
+                        const hasSelfies = r.selfies && Object.keys(r.selfies).length > 0;
+                        const hasJustification = Boolean(r.justification);
 
-                      // Helper to render interactive individual punch slot
-                      const renderPunchSlot = (field: TimeClockPunchType, val?: string) => {
-                        const hasFieldAdjustment = r.adjustments?.some((a) => a.field === field);
-                        const latestFieldLog = r.adjustments?.find((a) => a.field === field);
+                        // Helper to render interactive individual punch slot
+                        const renderPunchSlot = (field: TimeClockPunchType, val?: string) => {
+                          const hasFieldAdjustment = r.adjustments?.some((a) => a.field === field);
+                          const latestFieldLog = r.adjustments?.find((a) => a.field === field);
+
+                          return (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAdjustPunch(r, field);
+                              }}
+                              className={`group/slot relative px-2 py-1 rounded-lg font-mono font-bold text-center cursor-pointer transition-all border ${
+                                hasFieldAdjustment 
+                                  ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100' 
+                                  : val 
+                                  ? 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-900' 
+                                  : 'bg-slate-50/40 text-slate-400 border-dashed border-slate-200 hover:bg-slate-100'
+                              }`}
+                              title={hasFieldAdjustment && latestFieldLog ? `Ajustado por ${latestFieldLog.adjustedBy}: "${latestFieldLog.reason}". Clique para reajustar.` : 'Clique para editar ou excluir este horário com observação'}
+                            >
+                              <span>{val || '--:--'}</span>
+                              {hasFieldAdjustment && (
+                                <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
+                              )}
+                            </div>
+                          );
+                        };
 
                         return (
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenAdjustPunch(r, field);
-                            }}
-                            className={`group/slot relative px-2 py-1 rounded-lg font-mono font-bold text-center cursor-pointer transition-all border ${
-                              hasFieldAdjustment 
-                                ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100' 
-                                : val 
-                                ? 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-900' 
-                                : 'bg-slate-50/40 text-slate-400 border-dashed border-slate-200 hover:bg-slate-100'
-                            }`}
-                            title={hasFieldAdjustment && latestFieldLog ? `Ajustado por ${latestFieldLog.adjustedBy}: "${latestFieldLog.reason}". Clique para reajustar.` : 'Clique para editar ou excluir este horário com observação'}
+                          <tr 
+                            key={r.id} 
+                            onClick={() => setSelectedTimeRecordForDetail(r)}
+                            className="hover:bg-orange-50/60 cursor-pointer transition-colors group"
+                            title="Clique em qualquer lugar da linha para abrir o dossiê completo deste registro de ponto"
                           >
-                            <span>{val || '--:--'}</span>
-                            {hasFieldAdjustment && (
-                              <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
-                            )}
-                          </div>
-                        );
-                      };
+                            <td className="py-3 px-4 font-bold text-slate-900">
+                              <div>{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                              <span className="text-[10px] text-slate-400 uppercase font-semibold">{dayOfWeek}</span>
+                            </td>
 
-                      return (
-                        <tr 
-                          key={r.id} 
-                          onClick={() => setSelectedTimeRecordForDetail(r)}
-                          className="hover:bg-orange-50/60 cursor-pointer transition-colors group"
-                          title="Clique em qualquer lugar da linha para abrir o dossiê completo deste registro de ponto"
-                        >
-                          <td className="py-3 px-4 font-bold text-slate-900">
-                            <div>{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
-                            <span className="text-[10px] text-slate-400 uppercase font-semibold">{dayOfWeek}</span>
-                          </td>
+                            <td className="py-3 px-4">
+                              <span className="font-extrabold text-slate-900 block">{r.userName}</span>
+                              <span className="text-[10px] text-slate-400">{r.location || 'Sede Central'}</span>
+                            </td>
 
-                          <td className="py-3 px-4">
-                            <span className="font-extrabold text-slate-900 block">{r.userName}</span>
-                            <span className="text-[10px] text-slate-400">{r.location || 'Sede Central'}</span>
-                          </td>
+                            <td className="py-2.5 px-2 text-center">
+                              {renderPunchSlot('entry1', r.entry1)}
+                            </td>
 
-                          <td className="py-2.5 px-2 text-center">
-                            {renderPunchSlot('entry1', r.entry1)}
-                          </td>
+                            <td className="py-2.5 px-2 text-center">
+                              {renderPunchSlot('exit1', r.exit1)}
+                            </td>
 
-                          <td className="py-2.5 px-2 text-center">
-                            {renderPunchSlot('exit1', r.exit1)}
-                          </td>
+                            <td className="py-2.5 px-2 text-center">
+                              {renderPunchSlot('entry2', r.entry2)}
+                            </td>
 
-                          <td className="py-2.5 px-2 text-center">
-                            {renderPunchSlot('entry2', r.entry2)}
-                          </td>
+                            <td className="py-2.5 px-2 text-center">
+                              {renderPunchSlot('exit2', r.exit2)}
+                            </td>
 
-                          <td className="py-2.5 px-2 text-center">
-                            {renderPunchSlot('exit2', r.exit2)}
-                          </td>
-
-                          <td className="py-3 px-4 text-center font-bold text-slate-900">
-                            <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-800">
-                              {r.totalHours ? `${r.totalHours}h` : '--'}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-4 text-center">
-                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider ${
-                              r.status === 'justificado'
-                                ? 'bg-purple-100 text-purple-700'
-                                : r.status === 'extra'
-                                ? 'bg-orange-100 text-orange-700'
-                                : r.status === 'atraso'
-                                ? 'bg-rose-100 text-rose-700'
-                                : r.status === 'folga'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                              {r.status}
-                            </span>
-                          </td>
-
-                          {/* Biometria & Justificativas Visualizer */}
-                          <td className="py-3 px-3 text-center">
-                            {hasSelfies || hasJustification || r.geolocations ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const selfieUrl = r.selfies?.entry1 || r.selfies?.justification || Object.values(r.selfies || {})[0];
-                                  const gObj = r.geolocations?.entry1 || r.geolocations?.justification || Object.values(r.geolocations || {})[0];
-                                  setPreviewSelfie({
-                                    url: selfieUrl || '',
-                                    title: `Assinatura Biométrica & GPS — ${r.userName}`,
-                                    userName: r.userName,
-                                    date: r.date,
-                                    location: r.location,
-                                    time: r.entry1,
-                                    justification: r.justification,
-                                    geo: gObj
-                                  });
-                                }}
-                                className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 font-bold text-[11px]"
-                                title="Visualizar Selfie Biométrica, Localização GPS e Atestados"
-                              >
-                                <Camera className="w-3.5 h-3.5" />
-                                {r.geolocations && (
-                                  <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100 px-1 rounded flex items-center gap-0.5">
-                                    <Navigation className="w-2.5 h-2.5" /> GPS
-                                  </span>
-                                )}
-                                {hasJustification && <span className="text-[10px] text-purple-700 font-extrabold bg-purple-100 px-1 rounded">Atestado</span>}
-                              </button>
-                            ) : (
-                              <span className="text-slate-300 font-mono text-xs">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-3 px-4 text-center">
-                            {adjustmentsCount > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200" title={`${adjustmentsCount} alteração(ões) documentada(s)`}>
-                                <FileSignature className="w-3 h-3 text-amber-700" />
-                                {adjustmentsCount} obs
+                            <td className="py-3 px-4 text-center font-bold text-slate-900">
+                              <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-800">
+                                {r.totalHours ? `${r.totalHours}h` : '--'}
                               </span>
-                            ) : (
-                              <span className="text-[11px] text-slate-300 font-mono">Original</span>
-                            )}
-                          </td>
+                            </td>
 
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                title="Ajustar / Excluir Horários com Observação"
-                                onClick={() => handleOpenAdjustPunch(r, 'entry1')}
-                                className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                              >
-                                <Edit3 className="w-3 h-3" />
-                                <span>Ajustar</span>
-                              </button>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider ${
+                                r.status === 'justificado'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : r.status === 'extra'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : r.status === 'atraso'
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : r.status === 'folga'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                {r.status}
+                              </span>
+                            </td>
 
-                              <button
-                                type="button"
-                                title="Excluir Registro do Dia com Justificativa"
-                                onClick={() => {
-                                  setRecordToDeleteWithReason(r);
-                                  setDeleteDayReason('');
-                                }}
-                                className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            {/* Biometria & Justificativas Visualizer */}
+                            <td className="py-3 px-3 text-center">
+                              {hasSelfies || hasJustification || r.geolocations ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const selfieUrl = r.selfies?.entry1 || r.selfies?.justification || Object.values(r.selfies || {})[0];
+                                    const gObj = r.geolocations?.entry1 || r.geolocations?.justification || Object.values(r.geolocations || {})[0];
+                                    setPreviewSelfie({
+                                      url: selfieUrl || '',
+                                      title: `Assinatura Biométrica & GPS — ${r.userName}`,
+                                      userName: r.userName,
+                                      date: r.date,
+                                      location: r.location,
+                                      time: r.entry1,
+                                      justification: r.justification,
+                                      geo: gObj
+                                    });
+                                  }}
+                                  className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 font-bold text-[11px]"
+                                  title="Visualizar Selfie Biométrica, Localização GPS e Atestados"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                  {r.geolocations && (
+                                    <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100 px-1 rounded flex items-center gap-0.5">
+                                      <Navigation className="w-2.5 h-2.5" /> GPS
+                                    </span>
+                                  )}
+                                  {hasJustification && <span className="text-[10px] text-purple-700 font-extrabold bg-purple-100 px-1 rounded">Atestado</span>}
+                                </button>
+                              ) : (
+                                <span className="text-slate-300 font-mono text-xs">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-center">
+                              {adjustmentsCount > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200" title={`${adjustmentsCount} alteração(ões) documentada(s)`}>
+                                  <FileSignature className="w-3 h-3 text-amber-700" />
+                                  {adjustmentsCount} obs
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-300 font-mono">Original</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  title="Ajustar / Excluir Horários com Observação"
+                                  onClick={() => handleOpenAdjustPunch(r, 'entry1')}
+                                  className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Ajustar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  title="Excluir Registro do Dia com Justificativa"
+                                  onClick={() => {
+                                    setRecordToDeleteWithReason(r);
+                                    setDeleteDayReason('');
+                                  }}
+                                  className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* TAB CONTENT 2: REGISTROS DELETADOS (AUDITORIA E RESTAURAÇÃO) */}
+          {pontoSubTab === 'deletados' && (
+            <div className="bg-white rounded-2xl border border-rose-200 shadow-xs overflow-hidden animate-in fade-in duration-150">
+              <div className="p-4 bg-rose-50/70 border-b border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-rose-100 text-rose-700 rounded-xl">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-rose-950 flex items-center gap-2">
+                      Histórico de Registros de Ponto Excluídos / Anulados
+                      <span className="text-[10px] bg-rose-200 text-rose-900 font-bold px-2 py-0.5 rounded-full">
+                        {filteredDeletedTimeRecords.length} registro(s)
+                      </span>
+                    </h3>
+                    <p className="text-xs text-rose-800">
+                      Auditoria permanente de exclusões. Todas as fotos, coordenadas de GPS e justificativas de anulação ficam registradas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-4">Data do Ponto</th>
+                      <th className="py-3 px-4">Colaborador</th>
+                      <th className="py-3 px-4">Horários Registrados</th>
+                      <th className="py-3 px-3 text-center">Total Horas</th>
+                      <th className="py-3 px-4">Data / Hora Exclusão</th>
+                      <th className="py-3 px-4">Excluído Por</th>
+                      <th className="py-3 px-4">Motivo / Justificativa Legal</th>
+                      <th className="py-3 px-3 text-center">Biometria</th>
+                      <th className="py-3 px-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {filteredDeletedTimeRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-400 font-medium">
+                          <Archive className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                          Nenhum registro de ponto deletado encontrado para este período.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredDeletedTimeRecords.map((r) => {
+                        const dateObj = new Date(r.date + 'T00:00:00');
+                        const dayOfWeek = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' });
+                        const hasSelfies = r.selfies && Object.keys(r.selfies).length > 0;
+                        const hasJustification = Boolean(r.justification);
+
+                        return (
+                          <tr 
+                            key={r.id}
+                            onClick={() => setSelectedTimeRecordForDetail(r)}
+                            className="hover:bg-rose-50/40 cursor-pointer transition-colors"
+                            title="Clique para ver o dossiê completo deste registro excluído"
+                          >
+                            <td className="py-3 px-4 font-bold text-slate-800">
+                              <div>{dateObj.toLocaleDateString('pt-BR')}</div>
+                              <span className="text-[10px] text-slate-400 uppercase font-semibold">{dayOfWeek}</span>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <span className="font-extrabold text-slate-900 block">{r.userName}</span>
+                              <span className="text-[10px] text-slate-400">{r.location || 'Sede Central'}</span>
+                            </td>
+
+                            <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                              <span className="px-2 py-1 bg-slate-100 rounded-lg">
+                                {r.entry1 || '--:--'} &bull; {r.exit1 || '--:--'} &bull; {r.entry2 || '--:--'} &bull; {r.exit2 || '--:--'}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-center font-bold text-slate-700">
+                              {r.totalHours ? `${r.totalHours}h` : '--'}
+                            </td>
+
+                            <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                              {r.deletedAt ? new Date(r.deletedAt).toLocaleString('pt-BR') : '--'}
+                            </td>
+
+                            <td className="py-3 px-4 font-bold text-slate-800">
+                              {r.deletedBy || 'Gestor de RH'}
+                            </td>
+
+                            <td className="py-3 px-4 max-w-xs">
+                              <div className="bg-rose-50 text-rose-900 p-2 rounded-xl border border-rose-200 text-[11px] italic font-medium truncate" title={r.deletedReason || 'Exclusão formal documentada'}>
+                                "{r.deletedReason || 'Exclusão formal documentada'}"
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              {hasSelfies || hasJustification || r.geolocations ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const selfieUrl = r.selfies?.entry1 || r.selfies?.justification || Object.values(r.selfies || {})[0];
+                                    const gObj = r.geolocations?.entry1 || r.geolocations?.justification || Object.values(r.geolocations || {})[0];
+                                    setPreviewSelfie({
+                                      url: selfieUrl || '',
+                                      title: `Selfie & GPS (Registro Excluído) — ${r.userName}`,
+                                      userName: r.userName,
+                                      date: r.date,
+                                      location: r.location,
+                                      time: r.entry1,
+                                      justification: r.justification,
+                                      geo: gObj
+                                    });
+                                  }}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 font-bold text-[11px]"
+                                  title="Ver Foto e GPS do registro excluído"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                  {r.geolocations && <Navigation className="w-2.5 h-2.5 text-emerald-600" />}
+                                </button>
+                              ) : (
+                                <span className="text-slate-300 font-mono text-xs">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => restoreTimeRecord(r.id)}
+                                  title="Restaurar este registro de ponto para a lista ativa"
+                                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>Restaurar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Excluir DEFINITIVAMENTE este registro de ponto de ${r.userName} do banco de dados? Esta ação não pode ser desfeita.`)) {
+                                      permanentDeleteTimeRecord(r.id);
+                                    }
+                                  }}
+                                  title="Excluir permanentemente da base de dados"
+                                  className="p-1.5 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
@@ -4283,6 +4504,22 @@ export const RecursosHumanosModule: React.FC = () => {
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-800">
               
+              {/* Deletion / Anulation Audit Alert (if deleted) */}
+              {selectedTimeRecordForDetail.isDeleted && (
+                <div className="p-4 bg-rose-900/90 text-white rounded-2xl border border-rose-700 shadow-md space-y-1.5 animate-in fade-in">
+                  <div className="flex items-center gap-2 text-rose-300 font-extrabold uppercase text-[11px] tracking-wide">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>Registro Anulado / Excluído da Folha Oficial</span>
+                  </div>
+                  <p className="text-xs text-rose-100 font-medium">
+                    Excluído por <strong>{selectedTimeRecordForDetail.deletedBy || 'Gestor de RH'}</strong> em {selectedTimeRecordForDetail.deletedAt ? new Date(selectedTimeRecordForDetail.deletedAt).toLocaleString('pt-BR') : '--'}.
+                  </p>
+                  <p className="text-xs bg-black/40 p-2.5 rounded-xl border border-rose-800/60 text-white italic">
+                    Motivo / Justificativa Documentada: "{selectedTimeRecordForDetail.deletedReason || 'Exclusão formal documentada'}"
+                  </p>
+                </div>
+              )}
+
               {/* The 4 Punch Slots with Biometric Photo and GPS */}
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 mb-3 flex items-center gap-2">
@@ -4631,19 +4868,49 @@ export const RecursosHumanosModule: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  const rec = selectedTimeRecordForDetail;
-                  setRecordToDeleteWithReason(rec);
-                  setDeleteDayReason('');
-                }}
-                className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Excluir Registro do Dia (com Justificativa)</span>
-              </button>
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              {selectedTimeRecordForDetail.isDeleted ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      restoreTimeRecord(selectedTimeRecordForDetail.id);
+                      setSelectedTimeRecordForDetail(null);
+                    }}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Restaurar Registro para Folha Ativa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Excluir DEFINITIVAMENTE este registro de ${selectedTimeRecordForDetail.userName} do banco de dados?`)) {
+                        permanentDeleteTimeRecord(selectedTimeRecordForDetail.id);
+                        setSelectedTimeRecordForDetail(null);
+                      }
+                    }}
+                    className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Excluir Definitivo</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rec = selectedTimeRecordForDetail;
+                    setRecordToDeleteWithReason(rec);
+                    setDeleteDayReason('');
+                  }}
+                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Registro do Dia (com Justificativa)</span>
+                </button>
+              )}
 
               <div className="flex items-center gap-2">
                 <button

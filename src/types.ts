@@ -273,6 +273,10 @@ export interface TimeClockRecord {
   }; // Coordenadas GPS automáticas registradas nas batidas
   justification?: TimeClockJustification; // Dados da justificativa de falta/ausência
   adjustments?: TimeClockAdjustmentLog[]; // Histórico de auditoria de edições/exclusões
+  isDeleted?: boolean; // Indicador de registro excluído / anulado
+  deletedAt?: string;  // Data e hora da anulação/exclusão
+  deletedBy?: string;  // Nome do gestor responsável pela anulação
+  deletedReason?: string; // Motivo formal obrigatório da anulação
 }
 
 export type HierarchyLevel = 'diretoria' | 'gestao' | 'supervisao' | 'operacional';
