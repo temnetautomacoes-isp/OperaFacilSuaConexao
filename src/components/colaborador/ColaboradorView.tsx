@@ -422,24 +422,8 @@ export const ColaboradorView: React.FC = () => {
 
         </div>
 
-        {/* Bottom Area: Collaborator Card & Deslogar Button at the very bottom */}
-        <div className={`p-4 border-t border-slate-100 bg-slate-50/80 space-y-2.5 text-xs ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
-          {currentUser && (
-            <div className="p-2.5 bg-white border border-slate-200 rounded-2xl flex items-center gap-2.5 shadow-2xs">
-              <div className="w-8 h-8 rounded-full overflow-hidden p-0.5 bg-white border border-orange-400 shrink-0">
-                {currentUser.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <span className="text-sm font-bold text-slate-700">{currentUser.avatar || '👤'}</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="font-black text-slate-900 text-xs block truncate">{currentUser.name}</span>
-                <span className="text-[10px] text-orange-600 font-bold block truncate">{currentUser.position || 'Colaborador'}</span>
-              </div>
-            </div>
-          )}
-
+        {/* Bottom Area: Deslogar Button at the very bottom */}
+        <div className={`p-4 border-t border-slate-100 bg-slate-50/80 text-xs ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
           {/* Deslogar Button */}
           <button
             type="button"

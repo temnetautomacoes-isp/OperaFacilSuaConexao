@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   LayoutDashboard, 
@@ -13,7 +13,6 @@ import {
   X,
   LogOut
 } from 'lucide-react';
-import { OperatorProfileModal } from '../common/OperatorProfileModal';
 
 export const ErpSidebar: React.FC = () => {
   const { 
@@ -29,8 +28,6 @@ export const ErpSidebar: React.FC = () => {
     isMobileSidebarOpen,
     setMobileSidebarOpen
   } = useApp();
-
-  const [showOperatorProfile, setShowOperatorProfile] = useState(false);
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
 
@@ -179,39 +176,8 @@ export const ErpSidebar: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom Area: User snippet, Company slogan & Deslogar button at the very bottom */}
-        <div className={`p-3 border-t border-slate-100 bg-slate-50/80 space-y-2 text-xs ${isSidebarCollapsed ? 'lg:p-2' : ''}`}>
-          {currentUser && (
-            <button
-              type="button"
-              onClick={() => setShowOperatorProfile(true)}
-              title="Clique para ver o perfil do operador"
-              className={`w-full p-2 bg-white border border-slate-200 hover:border-orange-300 rounded-xl flex items-center gap-2 shadow-2xs transition-colors cursor-pointer group ${isSidebarCollapsed ? 'lg:p-1 lg:justify-center' : ''}`}
-            >
-              <div className="relative shrink-0">
-                {currentUser.avatarUrl ? (
-                  <img
-                    src={currentUser.avatarUrl}
-                    alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover border border-orange-500 ring-1 ring-orange-200"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="text-base">{currentUser.avatar || '👤'}</span>
-                )}
-                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white"></span>
-              </div>
-              <div className={`flex flex-col text-left overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <span className="font-bold text-slate-800 text-xs truncate group-hover:text-orange-600">
-                  {currentUser.name}
-                </span>
-                <span className="text-[10px] uppercase font-semibold text-orange-600 truncate">
-                  {currentUser.role === 'superadmin' ? '👑 Super Admin' : currentUser.role === 'admin' ? 'Administrador' : `Colaborador`}
-                </span>
-              </div>
-            </button>
-          )}
-
+        {/* Bottom Area: Deslogar button at the very bottom */}
+        <div className={`p-3 border-t border-slate-100 bg-slate-50/80 text-xs ${isSidebarCollapsed ? 'lg:p-2' : ''}`}>
           {/* Deslogar button at the very bottom */}
           <button
             type="button"
@@ -228,12 +194,6 @@ export const ErpSidebar: React.FC = () => {
             </span>
           </button>
         </div>
-
-        {/* Operator Profile Modal in ERP Sidebar */}
-        <OperatorProfileModal
-          isOpen={showOperatorProfile}
-          onClose={() => setShowOperatorProfile(false)}
-        />
       </aside>
     </>
   );
