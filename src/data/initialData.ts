@@ -76,78 +76,7 @@ export const INITIAL_USERS: UserAccount[] = [
   }
 ];
 
-export const INITIAL_EMPLOYEE_DOCUMENTS: EmployeeDocument[] = [
-  {
-    id: 'doc-1',
-    userId: 'user-caixa1',
-    name: 'Contrato de Trabalho Individual - CLT',
-    category: 'contrato',
-    fileName: 'Contrato_Trabalho_Claudia_Souza.pdf',
-    fileSize: '420 KB',
-    uploadDate: '2024-03-01',
-    notes: 'Contrato registrado de Analista de Suporte N1 com jornada 44h semanais.'
-  },
-  {
-    id: 'doc-2',
-    userId: 'user-caixa1',
-    name: 'Atestado de Saúde Ocupacional (ASO Admissional)',
-    category: 'aso_medico',
-    fileName: 'ASO_Admissional_Claudia.pdf',
-    fileSize: '280 KB',
-    uploadDate: '2024-02-28',
-    notes: 'Apto para função administrativa e suporte técnico.'
-  },
-  {
-    id: 'doc-3',
-    userId: 'user-caixa1',
-    name: 'Documentos Pessoais (RG, CPF, Comprovante Residência)',
-    category: 'pessoal',
-    fileName: 'Documentacao_Pessoal_Claudia.pdf',
-    fileSize: '1.2 MB',
-    uploadDate: '2024-03-01',
-    notes: 'Cópias autenticadas entregues no RH.'
-  },
-  {
-    id: 'doc-4',
-    userId: 'user-caixa2',
-    name: 'Certificado de Treinamento NR-35 (Trabalho em Altura)',
-    category: 'certificacao',
-    fileName: 'Certificado_NR35_Marcos_Oliveira.pdf',
-    fileSize: '850 KB',
-    uploadDate: '2024-05-18',
-    notes: 'Válido até Maio/2026. Obrigatório para escadas e postes de fibra óptica.'
-  },
-  {
-    id: 'doc-5',
-    userId: 'user-caixa2',
-    name: 'Certificado de Treinamento NR-10 (Segurança em Instalações)',
-    category: 'certificacao',
-    fileName: 'Certificado_NR10_Marcos.pdf',
-    fileSize: '650 KB',
-    uploadDate: '2024-05-18',
-    notes: 'Válido até Maio/2026.'
-  },
-  {
-    id: 'doc-6',
-    userId: 'user-caixa2',
-    name: 'Contrato de Trabalho & Termo de EPI / Ferramentas',
-    category: 'contrato',
-    fileName: 'Contrato_EPI_Veiculo_Marcos.pdf',
-    fileSize: '510 KB',
-    uploadDate: '2024-05-20',
-    notes: 'Termo de cautela da máquina de fusão, OTDR, escada e veículo.'
-  },
-  {
-    id: 'doc-7',
-    userId: 'user-admin',
-    name: 'Certificação MikroTik MTCNA / MTCRE & NOC',
-    category: 'certificacao',
-    fileName: 'Certificacoes_MikroTik_Carlos.pdf',
-    fileSize: '1.8 MB',
-    uploadDate: '2023-06-15',
-    notes: 'Certificações internacionais de roteamento avançado e BGP.'
-  }
-];
+export const INITIAL_EMPLOYEE_DOCUMENTS: EmployeeDocument[] = [];
 
 export const INITIAL_SETTINGS: StoreSettings = {
   name: 'OperaFácil',
@@ -234,7 +163,7 @@ const generateMockTimeRecords = (): TimeClockRecord[] => {
   return records;
 };
 
-export const INITIAL_TIME_RECORDS: TimeClockRecord[] = generateMockTimeRecords();
+export const INITIAL_TIME_RECORDS: TimeClockRecord[] = [];
 
 export const INITIAL_PRODUCTS: Product[] = [];
 

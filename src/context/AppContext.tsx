@@ -294,12 +294,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [timeRecords, setTimeRecords] = useState<TimeClockRecord[]>(() => {
     const saved = localStorage.getItem('operafacil_time_records');
-    return saved ? JSON.parse(saved) : INITIAL_TIME_RECORDS;
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return [];
+    }
   });
 
   const [employeeDocuments, setEmployeeDocuments] = useState<EmployeeDocument[]>(() => {
     const saved = localStorage.getItem('operafacil_employee_documents');
-    return saved ? JSON.parse(saved) : INITIAL_EMPLOYEE_DOCUMENTS;
+    if (!saved) return [];
+    try {
+      const parsed: EmployeeDocument[] = JSON.parse(saved);
+      return parsed.filter(
+        (d) => d.id !== 'doc-1' && d.id !== 'doc-2' && d.id !== 'doc-3' && d.id !== 'doc-4' && d.id !== 'doc-5' && d.id !== 'doc-6' && d.id !== 'doc-7'
+      );
+    } catch {
+      return [];
+    }
   });
 
   const [divisions, setDivisions] = useState<CompanyDivision[]>(() => {
@@ -412,12 +425,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        if (cloudDocs.status === 'fulfilled' && cloudDocs.value.length > 0) {
+        if (cloudDocs.status === 'fulfilled') {
           setEmployeeDocuments(cloudDocs.value);
+          safeSetItem('operafacil_employee_documents', cloudDocs.value);
         }
 
-        if (cloudTime.status === 'fulfilled' && cloudTime.value.length > 0) {
+        if (cloudTime.status === 'fulfilled') {
           setTimeRecords(cloudTime.value);
+          safeSetItem('operafacil_time_records', cloudTime.value);
         }
 
         if (cloudFinancial.status === 'fulfilled') {
@@ -480,11 +495,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_documents' }, async () => {
         const fresh = await supabaseService.fetchDocuments();
-        if (fresh.length > 0) setEmployeeDocuments(fresh);
+        setEmployeeDocuments(fresh);
+        safeSetItem('operafacil_employee_documents', fresh);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'time_clock_records' }, async () => {
         const fresh = await supabaseService.fetchTimeRecords();
-        if (fresh.length > 0) setTimeRecords(fresh);
+        setTimeRecords(fresh);
+        safeSetItem('operafacil_time_records', fresh);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_entries' }, async () => {
         const fresh = await supabaseService.fetchFinancialEntries();

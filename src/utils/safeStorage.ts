@@ -22,11 +22,22 @@ export const sanitizeSaleForStorage = (sale: any) => {
   };
 };
 
+export const sanitizeDocForStorage = (doc: any) => {
+  if (!doc) return doc;
+  return {
+    ...doc,
+    // Strip giant base64 file payloads from localStorage to prevent quota overflow (full fileUrl is preserved in memory/Supabase)
+    fileUrl: doc.fileUrl && doc.fileUrl.length > 200000 ? undefined : doc.fileUrl
+  };
+};
+
 export const safeSetItem = (key: string, value: any): boolean => {
   try {
     let toStore = value;
     if (key === 'mercadinho_sales' && Array.isArray(value)) {
       toStore = value.slice(0, 300).map(sanitizeSaleForStorage);
+    } else if (key === 'operafacil_employee_documents' && Array.isArray(value)) {
+      toStore = value.map(sanitizeDocForStorage);
     }
     const stringVal = typeof toStore === 'string' ? toStore : JSON.stringify(toStore);
     localStorage.setItem(key, stringVal);
