@@ -298,6 +298,7 @@ export const supabaseService = {
       notes: r.notes,
       location: r.location,
       selfies: r.selfies || undefined,
+      geolocations: r.geolocations || undefined,
       justification: r.justification || undefined,
     }));
   },
@@ -318,6 +319,7 @@ export const supabaseService = {
       notes: rec.notes || null,
       location: rec.location || null,
       selfies: rec.selfies || null,
+      geolocations: rec.geolocations || null,
       justification: rec.justification || null,
     }, { onConflict: 'id' });
 

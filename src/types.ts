@@ -232,6 +232,15 @@ export interface TimeClockJustification {
   reviewNotes?: string;
 }
 
+export interface TimeClockGeolocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number; // em metros
+  address?: string;
+  mapUrl?: string; // Link direto do Google Maps
+  timestamp?: string;
+}
+
 export interface TimeClockRecord {
   id: string;
   userId: string;
@@ -255,6 +264,13 @@ export interface TimeClockRecord {
     exit2?: string;
     justification?: string;
   }; // Fotos biométricas registradas nas batidas
+  geolocations?: {
+    entry1?: TimeClockGeolocation;
+    exit1?: TimeClockGeolocation;
+    entry2?: TimeClockGeolocation;
+    exit2?: TimeClockGeolocation;
+    justification?: TimeClockGeolocation;
+  }; // Coordenadas GPS automáticas registradas nas batidas
   justification?: TimeClockJustification; // Dados da justificativa de falta/ausência
   adjustments?: TimeClockAdjustmentLog[]; // Histórico de auditoria de edições/exclusões
 }

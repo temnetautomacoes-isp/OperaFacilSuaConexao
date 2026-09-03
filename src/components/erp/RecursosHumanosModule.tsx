@@ -7,6 +7,7 @@ import {
   EmployeeDocument, 
   DocumentCategory,
   TimeClockPunchType,
+  TimeClockGeolocation,
   CompanyDivision,
   HierarchyLevel,
   DivisionFlow,
@@ -66,7 +67,8 @@ import {
   Lock,
   Workflow,
   Sparkle,
-  Move
+  Move,
+  Navigation
 } from 'lucide-react';
 
 type RhTab = 'colaboradores' | 'folha_ponto' | 'documentos' | 'visao_geral';
@@ -237,6 +239,7 @@ export const RecursosHumanosModule: React.FC = () => {
     location?: string;
     time?: string;
     justification?: any;
+    geo?: TimeClockGeolocation;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1260,27 +1263,32 @@ export const RecursosHumanosModule: React.FC = () => {
 
                           {/* Biometria & Justificativas Visualizer */}
                           <td className="py-3 px-3 text-center">
-                            {hasSelfies || hasJustification ? (
+                            {hasSelfies || hasJustification || r.geolocations ? (
                               <button
                                 type="button"
                                 onClick={() => {
                                   const selfieUrl = r.selfies?.entry1 || r.selfies?.justification || Object.values(r.selfies || {})[0];
-                                  if (selfieUrl || r.justification) {
-                                    setPreviewSelfie({
-                                      url: selfieUrl || '',
-                                      title: `Assinatura Biométrica — ${r.userName}`,
-                                      userName: r.userName,
-                                      date: r.date,
-                                      location: r.location,
-                                      time: r.entry1,
-                                      justification: r.justification
-                                    });
-                                  }
+                                  const gObj = r.geolocations?.entry1 || r.geolocations?.justification || Object.values(r.geolocations || {})[0];
+                                  setPreviewSelfie({
+                                    url: selfieUrl || '',
+                                    title: `Assinatura Biométrica & GPS — ${r.userName}`,
+                                    userName: r.userName,
+                                    date: r.date,
+                                    location: r.location,
+                                    time: r.entry1,
+                                    justification: r.justification,
+                                    geo: gObj
+                                  });
                                 }}
                                 className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 font-bold text-[11px]"
-                                title="Visualizar Selfie Biométrica e Atestados"
+                                title="Visualizar Selfie Biométrica, Localização GPS e Atestados"
                               >
                                 <Camera className="w-3.5 h-3.5" />
+                                {r.geolocations && (
+                                  <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100 px-1 rounded flex items-center gap-0.5">
+                                    <Navigation className="w-2.5 h-2.5" /> GPS
+                                  </span>
+                                )}
                                 {hasJustification && <span className="text-[10px] text-purple-700 font-extrabold bg-purple-100 px-1 rounded">Atestado</span>}
                               </button>
                             ) : (
@@ -4129,10 +4137,38 @@ export const RecursosHumanosModule: React.FC = () => {
                 </div>
               )}
 
+              {/* GPS Geolocation details if present */}
+              {previewSelfie.geo && (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-900/50 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="font-black text-emerald-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <Navigation className="w-4 h-4" /> Coordenadas GPS da Batida
+                    </span>
+                    <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border border-emerald-800">
+                      ±{previewSelfie.geo.accuracy}m Precisão
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="font-mono text-slate-300 text-xs">
+                      Lat: <span className="text-white font-bold">{previewSelfie.geo.latitude}</span> | Lng: <span className="text-white font-bold">{previewSelfie.geo.longitude}</span>
+                    </div>
+                    <a
+                      href={previewSelfie.geo.mapUrl || `https://www.google.com/maps?q=${previewSelfie.geo.latitude},${previewSelfie.geo.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Abrir no Google Maps</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Audit Badge */}
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs flex items-center gap-2 text-emerald-400">
                 <ShieldCheck className="w-4 h-4 shrink-0" />
-                <span>Assinatura biométrica registrada e auditada nos termos da Portaria MTE.</span>
+                <span>Assinatura biométrica e geolocalização registradas e auditadas nos termos da Portaria MTE.</span>
               </div>
             </div>
 

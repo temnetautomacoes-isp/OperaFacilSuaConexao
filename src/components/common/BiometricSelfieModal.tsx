@@ -11,13 +11,16 @@ import {
   AlertCircle,
   Upload,
   UserCheck,
-  Eye
+  Eye,
+  Navigation,
+  Radio
 } from 'lucide-react';
+import { TimeClockGeolocation } from '../../types';
 
 interface BiometricSelfieModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCapture: (selfieBase64: string) => void;
+  onCapture: (selfieBase64: string, geoData?: TimeClockGeolocation) => void;
   title: string;
   subtitle?: string;
   employeeName: string;
@@ -44,9 +47,13 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [isFlashActive, setIsFlashActive] = useState<boolean>(false);
   const [currentTimeStr, setCurrentTimeStr] = useState<string>('');
+
+  // Automatic Geolocation State
+  const [geoPosition, setGeoPosition] = useState<TimeClockGeolocation | null>(null);
+  const [geoLoading, setGeoLoading] = useState<boolean>(true);
+  const [geoStatusMsg, setGeoStatusMsg] = useState<string>('Obtendo sinal de GPS...');
 
   // Clock tick for overlay
   useEffect(() => {
@@ -60,6 +67,38 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Request Automatic GPS on mount
+  useEffect(() => {
+    if (isOpen && typeof navigator !== 'undefined' && navigator.geolocation) {
+      setGeoLoading(true);
+      setGeoStatusMsg('Obtendo sinal de GPS...');
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          const acc = Math.round(pos.coords.accuracy || 10);
+          const geoObj: TimeClockGeolocation = {
+            latitude: lat,
+            longitude: lng,
+            accuracy: acc,
+            mapUrl: `https://www.google.com/maps?q=${lat},${lng}`,
+            timestamp: new Date().toISOString()
+          };
+          setGeoPosition(geoObj);
+          setGeoLoading(false);
+          setGeoStatusMsg(`GPS Ativo: ${lat}, ${lng} (±${acc}m)`);
+        },
+        (err) => {
+          console.warn('[GPS] Geolocation warning:', err);
+          setGeoLoading(false);
+          setGeoStatusMsg('GPS não autorizado ou indisponível');
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    }
+  }, [isOpen]);
 
   // Start Camera
   const startCamera = useCallback(async () => {
@@ -121,7 +160,7 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
     };
   }, [isOpen]);
 
-  // Snap photo from video stream with watermark overlay
+  // Snap photo from video stream with rich watermark overlay (including GPS coordinates)
   const takeSnapshot = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -133,12 +172,12 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = video.videoWidth || 640;
-    const height = video.videoHeight || 640;
+    const width = 640;
+    const height = 640;
     canvas.width = width;
     canvas.height = height;
 
-    // Draw mirrored video frame (for natural front camera feel)
+    // Draw mirrored video frame (for natural front camera selfie)
     ctx.save();
     ctx.translate(width, 0);
     ctx.scale(-1, 1);
@@ -146,28 +185,40 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
     ctx.restore();
 
     // Add semi-transparent gradient watermark bar at bottom
-    const gradient = ctx.createLinearGradient(0, height - 120, 0, height);
+    const barHeight = 130;
+    const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height);
     gradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
-    gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.7)');
-    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+    gradient.addColorStop(0.25, 'rgba(15, 23, 42, 0.75)');
+    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.96)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, height - 120, width, 120);
+    ctx.fillRect(0, height - barHeight, width, barHeight);
 
     // Draw Watermark text
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px Inter, sans-serif';
-    ctx.fillText(`${employeeName} (${employeeCode})`, 24, height - 70);
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(`${employeeName} (${employeeCode})`, 24, height - 82);
 
     ctx.fillStyle = '#f97316'; // Orange
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`● BIOMETRIA: ${actionTypeLabel.toUpperCase()}`, 24, height - 42);
+    ctx.fillText(`● BIOMETRIA: ${actionTypeLabel.toUpperCase()}`, 24, height - 56);
 
     ctx.fillStyle = '#cbd5e1'; // Slate-300
-    ctx.font = '14px Inter, sans-serif';
-    ctx.fillText(`${currentTimeStr} • ${locationName}`, 24, height - 18);
+    ctx.font = '13px sans-serif';
+    ctx.fillText(`${currentTimeStr} • ${locationName}`, 24, height - 32);
+
+    // GPS watermark line
+    if (geoPosition) {
+      ctx.fillStyle = '#34d399'; // Emerald-400
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(`📍 GPS: ${geoPosition.latitude}, ${geoPosition.longitude} (±${geoPosition.accuracy}m)`, 24, height - 12);
+    } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(`📍 GPS: Coordenadas não disponíveis`, 24, height - 12);
+    }
 
     // Get Base64 JPEG data
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
     setCapturedImage(dataUrl);
     stopCamera();
   };
@@ -186,10 +237,10 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
     }
   };
 
-  // Confirm capture
+  // Confirm capture and return selfie + geolocation
   const handleConfirm = () => {
     if (capturedImage) {
-      onCapture(capturedImage);
+      onCapture(capturedImage, geoPosition || undefined);
       onClose();
     }
   };
@@ -197,7 +248,7 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[95vh] text-white">
         
         {/* Header */}
@@ -210,7 +261,7 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
               <h3 className="font-black text-base text-white tracking-tight flex items-center gap-2">
                 <span>{title}</span>
                 <span className="text-[10px] font-extrabold uppercase bg-orange-500 text-white px-2 py-0.5 rounded-full">
-                  Biometria
+                  Biometria + GPS
                 </span>
               </h3>
               <p className="text-xs text-slate-400">{actionTypeLabel}</p>
@@ -266,7 +317,7 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
                 />
                 <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 shadow-lg">
                   <Check className="w-3.5 h-3.5" />
-                  <span>Foto Capturada</span>
+                  <span>Foto & GPS Prontos</span>
                 </div>
               </div>
             ) : !cameraError ? (
@@ -289,20 +340,36 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
                   </div>
                 </div>
 
-                {/* Overlay Tags */}
+                {/* Overlay Clock Tag */}
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 text-[10px] font-mono text-white flex items-center gap-1.5">
                   <Clock className="w-3 h-3 text-orange-400" />
                   <span>{currentTimeStr.split(' ')[1] || '00:00:00'}</span>
                 </div>
 
-                <div className="absolute bottom-3 left-3 right-3 bg-black/70 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-left">
+                {/* Overlay GPS Live Badge (Top-Right) */}
+                <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 text-[10px] text-white flex items-center gap-1.5 shadow-md">
+                  <span className={`w-2 h-2 rounded-full ${geoPosition ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'}`} />
+                  <span className="font-mono text-[9.5px]">
+                    {geoPosition ? `GPS: ${geoPosition.latitude}, ${geoPosition.longitude}` : (geoLoading ? 'Localizando GPS...' : 'GPS Manual')}
+                  </span>
+                </div>
+
+                {/* Bottom Overlay Info */}
+                <div className="absolute bottom-3 left-3 right-3 bg-black/75 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-left space-y-1">
                   <div className="flex items-center justify-between text-xs font-bold text-white">
                     <span>{employeeName}</span>
                     <span className="text-orange-400 font-mono text-[10px]">{employeeCode}</span>
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-slate-300 mt-0.5">
-                    <MapPin className="w-3 h-3 text-slate-400" />
-                    <span className="truncate">{locationName}</span>
+                  <div className="flex items-center justify-between text-[10px] text-slate-300">
+                    <div className="flex items-center gap-1 truncate max-w-[200px]">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{locationName}</span>
+                    </div>
+                    {geoPosition && (
+                      <span className="text-emerald-400 font-mono font-bold shrink-0">
+                        ±{geoPosition.accuracy}m
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -335,12 +402,24 @@ export const BiometricSelfieModal: React.FC<BiometricSelfieModalProps> = ({
             )}
           </div>
 
-          {/* Explanatory security badge */}
-          <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="leading-tight">
-              A selfie biométrica é criptografada e vinculada à sua folha de ponto para proteção e auditoria do colaborador e da empresa.
-            </span>
+          {/* Automatic Geolocation Live Status Banner */}
+          <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center justify-between text-xs text-slate-300">
+            <div className="flex items-center gap-2">
+              <Navigation className={`w-4 h-4 shrink-0 ${geoPosition ? 'text-emerald-400' : 'text-orange-400'}`} />
+              <span className="leading-tight">
+                {geoStatusMsg}
+              </span>
+            </div>
+            {geoPosition && (
+              <a
+                href={geoPosition.mapUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] text-orange-400 hover:underline font-bold shrink-0 ml-2"
+              >
+                Ver Mapa
+              </a>
+            )}
           </div>
         </div>
 

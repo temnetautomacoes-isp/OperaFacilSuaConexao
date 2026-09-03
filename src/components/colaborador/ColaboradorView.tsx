@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { TimeClockPunchType, TimeClockRecord, EmployeeDocument } from '../../types';
+import { TimeClockPunchType, TimeClockRecord, EmployeeDocument, TimeClockGeolocation } from '../../types';
 import { 
   Clock, 
   Calendar, 
@@ -38,6 +38,7 @@ import {
   Camera,
   FolderLock,
   Eye,
+  Navigation,
   Check,
   Zap,
   Fingerprint,
@@ -88,7 +89,7 @@ export const ColaboradorView: React.FC = () => {
   const [selectedDateForJustify, setSelectedDateForJustify] = useState<string | undefined>(undefined);
   
   // Preview Modals
-  const [previewSelfie, setPreviewSelfie] = useState<{ url: string; title: string; time?: string; location?: string } | null>(null);
+  const [previewSelfie, setPreviewSelfie] = useState<{ url: string; title: string; time?: string; location?: string; geo?: TimeClockGeolocation } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<EmployeeDocument | null>(null);
 
   // Folha de Ponto Filter State
@@ -209,12 +210,12 @@ export const ColaboradorView: React.FC = () => {
   };
 
   // On Selfie Captured -> Submit Punch
-  const handleCaptureSelfieAndPunch = (selfieBase64: string) => {
+  const handleCaptureSelfieAndPunch = (selfieBase64: string, geoData?: TimeClockGeolocation) => {
     setIsSubmittingPunch(true);
     setRecentPunchSuccess(null);
 
     setTimeout(() => {
-      const res = punchClock(targetPunchType, selectedLocation, punchNotes, selfieBase64);
+      const res = punchClock(targetPunchType, selectedLocation, punchNotes, selfieBase64, geoData);
       setIsSubmittingPunch(false);
       if (res.success) {
         setPunchNotes('');
@@ -600,7 +601,8 @@ export const ColaboradorView: React.FC = () => {
                               url: todayRecord.selfies!.entry1!,
                               title: 'Selfie Biométrica — Entrada',
                               time: todayRecord.entry1,
-                              location: todayRecord.location
+                              location: todayRecord.location,
+                              geo: todayRecord.geolocations?.entry1
                             });
                           }}
                           className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
@@ -640,7 +642,8 @@ export const ColaboradorView: React.FC = () => {
                               url: todayRecord.selfies!.exit1!,
                               title: 'Selfie Biométrica — Saída Almoço',
                               time: todayRecord.exit1,
-                              location: todayRecord.location
+                              location: todayRecord.location,
+                              geo: todayRecord.geolocations?.exit1
                             });
                           }}
                           className="text-[10px] text-orange-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
@@ -994,17 +997,19 @@ export const ColaboradorView: React.FC = () => {
                                 type="button"
                                 onClick={() => {
                                   const sUrl = item.record?.selfies?.entry1 || item.record?.selfies?.justification || Object.values(item.record?.selfies || {})[0];
+                                  const gObj = item.record?.geolocations?.entry1 || item.record?.geolocations?.justification || Object.values(item.record?.geolocations || {})[0];
                                   if (sUrl) {
                                     setPreviewSelfie({
                                       url: sUrl,
                                       title: `Selfie Biométrica — ${item.dateStr}`,
                                       time: item.record?.entry1 || 'Registrado',
-                                      location: item.record?.location
+                                      location: item.record?.location,
+                                      geo: gObj
                                     });
                                   }
                                 }}
                                 className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer"
-                                title="Visualizar Foto da Batida"
+                                title="Visualizar Foto da Batida e Localização GPS"
                               >
                                 <Camera className="w-3.5 h-3.5" />
                               </button>
@@ -1414,9 +1419,23 @@ export const ColaboradorView: React.FC = () => {
                     <span className="font-semibold text-orange-300 truncate max-w-[200px]">{previewSelfie.location}</span>
                   </div>
                 )}
+                {previewSelfie.geo && (
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-800">
+                    <span className="text-slate-400">GPS Registrado:</span>
+                    <a
+                      href={previewSelfie.geo.mapUrl || `https://www.google.com/maps?q=${previewSelfie.geo.latitude},${previewSelfie.geo.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-emerald-400 hover:text-emerald-300 text-[11px] font-bold hover:underline flex items-center gap-1"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>{previewSelfie.geo.latitude}, {previewSelfie.geo.longitude} (Ver no Mapa)</span>
+                    </a>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 pt-1">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Biometria verificada e vinculada ao espelho de ponto</span>
+                  <span>Biometria e GPS verificados e vinculados ao espelho de ponto</span>
                 </div>
               </div>
             </div>

@@ -45,6 +45,7 @@ export const JustifyAbsenceModal: React.FC<JustifyAbsenceModalProps> = ({
 
   // Selfie biometric state
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+  const [geoData, setGeoData] = useState<any>(undefined);
   const [isSelfieModalOpen, setIsSelfieModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -112,7 +113,8 @@ export const JustifyAbsenceModal: React.FC<JustifyAbsenceModalProps> = ({
         documentName: attachedDocName || undefined,
         documentSize: attachedDocSize || undefined,
         documentUrl: attachedDocUrl || undefined,
-        selfieUrl: selfieUrl
+        selfieUrl: selfieUrl,
+        geoData: geoData
       });
 
       showNotification('Justificativa de ausência enviada com sucesso ao RH!');
@@ -387,8 +389,9 @@ export const JustifyAbsenceModal: React.FC<JustifyAbsenceModalProps> = ({
         <BiometricSelfieModal
           isOpen={isSelfieModalOpen}
           onClose={() => setIsSelfieModalOpen(false)}
-          onCapture={(capturedBase64) => {
+          onCapture={(capturedBase64, capturedGeo) => {
             setSelfieUrl(capturedBase64);
+            setGeoData(capturedGeo);
             setIsSelfieModalOpen(false);
           }}
           title="Assinatura Biométrica de Justificativa"

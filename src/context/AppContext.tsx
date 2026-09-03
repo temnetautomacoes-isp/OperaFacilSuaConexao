@@ -14,6 +14,7 @@ import {
   ProductBatch,
   TimeClockRecord,
   TimeClockPunchType,
+  TimeClockGeolocation,
   EmployeeDocument,
   CompanyDivision
 } from '../types';
@@ -63,7 +64,7 @@ interface AppContextType {
   
   // Ponto Eletrônico & Gestão do Colaborador (RH)
   timeRecords: TimeClockRecord[];
-  punchClock: (type: TimeClockPunchType, location?: string, notes?: string, selfieUrl?: string) => { success: boolean; message: string };
+  punchClock: (type: TimeClockPunchType, location?: string, notes?: string, selfieUrl?: string, geoData?: TimeClockGeolocation) => { success: boolean; message: string };
   justifyAbsence: (data: {
     userId: string;
     userName: string;
@@ -76,6 +77,7 @@ interface AppContextType {
     documentName?: string;
     documentSize?: string;
     selfieUrl: string;
+    geoData?: TimeClockGeolocation;
   }) => void;
   updateTimeRecord: (id: string, updated: Partial<TimeClockRecord>) => void;
   deleteTimeRecord: (id: string) => void;
@@ -1627,7 +1629,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { totalHours, extraHours };
   };
 
-  const punchClock = (type: TimeClockPunchType, location = 'Sede Central ISP', notes?: string, selfieUrl?: string) => {
+  const punchClock = (type: TimeClockPunchType, location = 'Sede Central ISP', notes?: string, selfieUrl?: string, geoData?: TimeClockGeolocation) => {
     if (!currentUser) {
       return { success: false, message: 'Nenhum colaborador autenticado no momento.' };
     }
@@ -1651,6 +1653,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(selfieUrl ? { [type]: selfieUrl } : {})
     };
 
+    const newGeolocations = {
+      ...(existing?.geolocations || {}),
+      ...(geoData ? { [type]: geoData } : {})
+    };
+
     if (existing) {
       const e1 = type === 'entry1' ? timeStr : existing.entry1;
       const ex1 = type === 'exit1' ? timeStr : existing.exit1;
@@ -1666,7 +1673,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalHours,
         extraHours,
         status: extraHours > 0 ? 'extra' : 'normal',
-        selfies: newSelfies
+        selfies: newSelfies,
+        geolocations: newGeolocations
       };
 
       updatedRecord = { ...existing, ...updatedFields };
@@ -1684,13 +1692,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         location,
         notes,
         selfies: newSelfies,
+        geolocations: newGeolocations,
         deviceInfo: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mobile') ? 'Dispositivo Móvel' : 'Terminal Web Desktop',
       };
       setTimeRecords((prev) => [updatedRecord, ...prev]);
     }
 
     supabaseService.saveTimeRecord(updatedRecord).catch(console.error);
-    const msg = `Ponto registrado com sucesso: ${typeLabels[type]} às ${timeStr}! Biometria validada.`;
+    const msg = `Ponto registrado com sucesso: ${typeLabels[type]} às ${timeStr}! Biometria e GPS validados.`;
     showNotification(msg);
     return { success: true, message: msg };
   };
@@ -1707,6 +1716,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     documentName?: string;
     documentSize?: string;
     selfieUrl: string;
+    geoData?: TimeClockGeolocation;
   }) => {
     const existing = timeRecords.find((r) => r.userId === data.userId && r.date === data.date);
     const justificationObj: TimeClockJustification = {
@@ -1734,6 +1744,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selfies: {
           ...(existing.selfies || {}),
           justification: data.selfieUrl
+        },
+        geolocations: {
+          ...(existing.geolocations || {}),
+          ...(data.geoData ? { justification: data.geoData } : {})
         }
       };
       setTimeRecords((prev) => prev.map((r) => (r.id === existing.id ? recordToSave : r)));
@@ -1749,6 +1763,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selfies: {
           justification: data.selfieUrl
         },
+        geolocations: data.geoData ? { justification: data.geoData } : undefined,
         deviceInfo: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mobile') ? 'Dispositivo Móvel' : 'Terminal Web Desktop',
       };
       setTimeRecords((prev) => [recordToSave, ...prev]);
