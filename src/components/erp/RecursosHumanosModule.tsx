@@ -88,10 +88,10 @@ const PUNCH_LABELS: Record<TimeClockPunchType, string> = {
 };
 
 const HIERARCHY_CONFIG: Record<HierarchyLevel, { label: string; badge: string; color: string; order: number }> = {
-  diretoria: { label: 'Diretoria Executiva', badge: 'bg-amber-100 text-amber-900 border-amber-300', color: 'text-amber-600', order: 1 },
-  gestao: { label: 'Gestão & Coordenação', badge: 'bg-blue-100 text-blue-900 border-blue-300', color: 'text-blue-600', order: 2 },
-  supervisao: { label: 'Supervisão & Especialistas', badge: 'bg-emerald-100 text-emerald-900 border-emerald-300', color: 'text-emerald-600', order: 3 },
-  operacional: { label: 'Operacional & Técnicos', badge: 'bg-slate-100 text-slate-800 border-slate-300', color: 'text-slate-600', order: 4 },
+  diretoria: { label: 'Diretoria Executiva', badge: 'bg-amber-50 text-amber-800 border-amber-200', color: 'text-amber-600', order: 1 },
+  gestao: { label: 'Gestão & Coordenação', badge: 'bg-blue-50 text-blue-800 border-blue-200', color: 'text-blue-600', order: 2 },
+  supervisao: { label: 'Supervisão & Especialistas', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200', color: 'text-emerald-600', order: 3 },
+  operacional: { label: 'Operacional & Técnicos', badge: 'bg-slate-50 text-slate-700 border-slate-200', color: 'text-slate-600', order: 4 },
 };
 
 const DIVISION_COLOR_THEMES: Record<string, { bg: string; border: string; badge: string; text: string; lightBg: string }> = {
@@ -862,8 +862,8 @@ export const RecursosHumanosModule: React.FC = () => {
                   <div className="space-y-4">
                     {/* Header with Avatar & Badge */}
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative shrink-0">
                           {user.avatarUrl ? (
                             <img
                               src={user.avatarUrl}
@@ -880,7 +880,7 @@ export const RecursosHumanosModule: React.FC = () => {
                           }`} />
                         </div>
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h3 className="font-extrabold text-sm text-slate-900 truncate group-hover:text-orange-600 transition-colors">
                             {user.name}
                           </h3>
@@ -893,13 +893,13 @@ export const RecursosHumanosModule: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          user.role === 'superadmin' ? 'bg-amber-100 text-amber-800 border border-amber-300' : user.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap shadow-2xs ${
+                          user.role === 'superadmin' ? 'bg-amber-100 text-amber-900 border border-amber-300' : user.role === 'admin' ? 'bg-blue-100 text-blue-900 border border-blue-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
                         }`}>
-                          {user.role === 'superadmin' ? '👑 Super Admin' : user.role}
+                          {user.role === 'superadmin' ? '👑 Super Admin' : user.role === 'admin' ? 'Administrador' : 'Operador'}
                         </span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${hConfig.badge}`}>
+                        <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap shadow-2xs ${hConfig.badge}`}>
                           {hConfig.label}
                         </span>
                       </div>
