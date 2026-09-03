@@ -31,6 +31,22 @@ export const sanitizeDocForStorage = (doc: any) => {
   };
 };
 
+export const sanitizeTimeRecordForStorage = (rec: any) => {
+  if (!rec) return rec;
+  return {
+    ...rec,
+    // Keep selfies under reasonable limit in localStorage to avoid QuotaExceededError
+    selfies: rec.selfies ? Object.fromEntries(
+      Object.entries(rec.selfies).map(([k, v]) => [k, typeof v === 'string' && v.length > 150000 ? v.slice(0, 100) + '...' : v])
+    ) : undefined,
+    justification: rec.justification ? {
+      ...rec.justification,
+      selfieUrl: rec.justification.selfieUrl && rec.justification.selfieUrl.length > 150000 ? rec.justification.selfieUrl.slice(0, 100) + '...' : rec.justification.selfieUrl,
+      documentUrl: rec.justification.documentUrl && rec.justification.documentUrl.length > 150000 ? undefined : rec.justification.documentUrl
+    } : undefined
+  };
+};
+
 export const safeSetItem = (key: string, value: any): boolean => {
   try {
     let toStore = value;
@@ -38,6 +54,8 @@ export const safeSetItem = (key: string, value: any): boolean => {
       toStore = value.slice(0, 300).map(sanitizeSaleForStorage);
     } else if (key === 'operafacil_employee_documents' && Array.isArray(value)) {
       toStore = value.map(sanitizeDocForStorage);
+    } else if (key === 'operafacil_time_records' && Array.isArray(value)) {
+      toStore = value.map(sanitizeTimeRecordForStorage);
     }
     const stringVal = typeof toStore === 'string' ? toStore : JSON.stringify(toStore);
     localStorage.setItem(key, stringVal);
@@ -65,7 +83,11 @@ export const safeSetItem = (key: string, value: any): boolean => {
           localStorage.setItem('mercadinho_sales', JSON.stringify(parsedSales.slice(0, 30).map(sanitizeSaleForStorage)));
         }
       }
-      const retryVal = typeof value === 'string' ? value : JSON.stringify(value);
+      let prunedToStore = value;
+      if (key === 'operafacil_time_records' && Array.isArray(value)) {
+        prunedToStore = value.map((r: any) => ({ ...r, selfies: undefined, justification: undefined }));
+      }
+      const retryVal = typeof prunedToStore === 'string' ? prunedToStore : JSON.stringify(prunedToStore);
       localStorage.setItem(key, retryVal);
       return true;
     } catch (retryError) {

@@ -439,13 +439,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (cloudDocs.status === 'fulfilled') {
-          setEmployeeDocuments(cloudDocs.value);
-          safeSetItem('operafacil_employee_documents', cloudDocs.value);
+          if (cloudDocs.value.length > 0) {
+            setEmployeeDocuments(cloudDocs.value);
+            safeSetItem('operafacil_employee_documents', cloudDocs.value);
+          } else {
+            const saved = localStorage.getItem('operafacil_employee_documents');
+            if (saved) {
+              try {
+                const parsed: EmployeeDocument[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  setEmployeeDocuments(parsed);
+                  parsed.forEach((d) => supabaseService.saveDocument(d).catch(console.error));
+                }
+              } catch {}
+            }
+          }
         }
 
         if (cloudTime.status === 'fulfilled') {
-          setTimeRecords(cloudTime.value);
-          safeSetItem('operafacil_time_records', cloudTime.value);
+          if (cloudTime.value.length > 0) {
+            setTimeRecords(cloudTime.value);
+            safeSetItem('operafacil_time_records', cloudTime.value);
+          } else {
+            const saved = localStorage.getItem('operafacil_time_records');
+            if (saved) {
+              try {
+                const parsed: TimeClockRecord[] = JSON.parse(saved);
+                if (parsed.length > 0) {
+                  setTimeRecords(parsed);
+                  parsed.forEach((t) => supabaseService.saveTimeRecord(t).catch(console.error));
+                }
+              } catch {}
+            }
+          }
         }
 
         if (cloudFinancial.status === 'fulfilled') {
@@ -1819,7 +1845,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTimeRecord = (id: string) => {
-    setTimeRecords((prev) => prev.filter((r) => r.id !== id));
+    setTimeRecords((prev) => {
+      const filtered = prev.filter((r) => r.id !== id);
+      safeSetItem('operafacil_time_records', filtered);
+      return filtered;
+    });
+    supabaseService.deleteTimeRecord(id).catch(console.error);
     showNotification('Registro de ponto removido.');
   };
 

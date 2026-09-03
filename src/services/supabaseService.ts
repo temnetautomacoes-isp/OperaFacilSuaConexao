@@ -303,23 +303,34 @@ export const supabaseService = {
   },
 
   async saveTimeRecord(rec: TimeClockRecord): Promise<void> {
-    await supabase.from('time_clock_records').upsert({
+    const { error } = await supabase.from('time_clock_records').upsert({
       id: rec.id,
       user_id: rec.userId,
       user_name: rec.userName,
       date: rec.date,
-      entry1: rec.entry1,
-      exit1: rec.exit1,
-      entry2: rec.entry2,
-      exit2: rec.exit2,
-      total_hours: rec.totalHours,
-      extra_hours: rec.extraHours,
-      status: rec.status,
-      notes: rec.notes,
-      location: rec.location,
+      entry1: rec.entry1 || null,
+      exit1: rec.exit1 || null,
+      entry2: rec.entry2 || null,
+      exit2: rec.exit2 || null,
+      total_hours: rec.totalHours || 0,
+      extra_hours: rec.extraHours || 0,
+      status: rec.status || 'normal',
+      notes: rec.notes || null,
+      location: rec.location || null,
       selfies: rec.selfies || null,
       justification: rec.justification || null,
-    });
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[SupabaseService] Erro ao salvar time_clock_records:', error);
+    }
+  },
+
+  async deleteTimeRecord(id: string): Promise<void> {
+    const { error } = await supabase.from('time_clock_records').delete().eq('id', id);
+    if (error) {
+      console.error('[SupabaseService] Erro ao excluir time_clock_records:', error);
+    }
   },
 
   // -------------------------------------------------------------
