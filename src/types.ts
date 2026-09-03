@@ -9,7 +9,7 @@ export type ProductCategory =
   | 'Serviços & Planos'
   | (string & {});
 
-export type ProductUnit = 'un' | 'kg' | 'pct' | 'cx' | 'l' | 'g';
+export type ProductUnit = 'un' | 'm' | 'kg' | 'pct' | 'cx' | 'l' | 'g';
 
 export interface ProductBatch {
   id: string;

@@ -882,6 +882,7 @@ export const EstoqueModule: React.FC = () => {
                     className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium text-slate-800"
                   >
                     <option value="un">Unidade (un)</option>
+                    <option value="m">Metro (m)</option>
                     <option value="kg">Quilo (kg)</option>
                     <option value="pct">Pacote (pct)</option>
                     <option value="cx">Caixa (cx)</option>
@@ -979,7 +980,7 @@ export const EstoqueModule: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Preço de Custo (R$):
+                      {formUnit === 'm' ? 'Preço de Custo por Metro (R$/m):' : 'Preço de Custo (R$):'}
                     </label>
                     <input
                       type="number"
@@ -993,7 +994,7 @@ export const EstoqueModule: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-bold text-orange-600 mb-1">
-                      Preço de Venda (R$):
+                      {formUnit === 'm' ? 'Preço de Venda por Metro (R$/m):' : 'Preço de Venda (R$):'}
                     </label>
                     <input
                       type="number"
@@ -1008,11 +1009,57 @@ export const EstoqueModule: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center pt-1 text-xs">
-                  <span className="text-slate-600">Margem de Lucro Estimada:</span>
+                  <span className="text-slate-600">Margem de Lucro por {formUnit === 'm' ? 'Metro' : 'Unidade'}:</span>
                   <span className="font-mono font-bold text-orange-600">
-                    +{profitMarginPercent}% (R$ {(saleNum - costNum).toFixed(2)})
+                    +{profitMarginPercent}% (R$ {(saleNum - costNum).toFixed(2)}{formUnit === 'm' ? '/m' : ''})
                   </span>
                 </div>
+
+                {/* Live Meter Total Calculation Card */}
+                {formUnit === 'm' && (
+                  <div className="mt-2.5 p-3 bg-blue-50/90 border border-blue-200/90 rounded-xl space-y-2 text-xs animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between text-blue-950 font-black">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                        Cálculo Total da Metragem ({parseFloat(formStock) || 0} metros):
+                      </span>
+                      <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">
+                        Total da Bobina / Lote
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-0.5">
+                      <div className="bg-white p-2.5 rounded-lg border border-blue-200/60 shadow-2xs">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Custo Total:</span>
+                        <span className="text-xs font-black font-mono text-slate-900 block mt-0.5">
+                          R$ {((parseFloat(formCostPrice) || 0) * (parseFloat(formStock) || 0)).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono block">
+                          {parseFloat(formStock) || 0}m × R$ {(parseFloat(formCostPrice) || 0).toFixed(2)}/m
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
+                        <span className="text-[10px] text-orange-600 font-bold block">Venda Total:</span>
+                        <span className="text-xs font-black font-mono text-orange-600 block mt-0.5">
+                          R$ {((parseFloat(formSalePrice) || 0) * (parseFloat(formStock) || 0)).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] text-orange-400 font-mono block">
+                          {parseFloat(formStock) || 0}m × R$ {(parseFloat(formSalePrice) || 0).toFixed(2)}/m
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80 shadow-2xs">
+                        <span className="text-[10px] text-emerald-600 font-bold block">Lucro Total:</span>
+                        <span className="text-xs font-black font-mono text-emerald-700 block mt-0.5">
+                          R$ {(((parseFloat(formSalePrice) || 0) - (parseFloat(formCostPrice) || 0)) * (parseFloat(formStock) || 0)).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] text-emerald-600 font-bold font-mono block">
+                          +{profitMarginPercent}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Validade, Fabricação & Lote (Prevenção de Perdas) */}
@@ -1066,13 +1113,14 @@ export const EstoqueModule: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Estoque Inicial:
+                    {formUnit === 'm' ? 'Estoque Inicial em Metros (m):' : 'Estoque Inicial:'}
                   </label>
                   <input
                     type="number"
-                    step="1"
+                    step="any"
                     value={formStock}
                     onChange={(e) => setFormStock(e.target.value)}
+                    placeholder={formUnit === 'm' ? 'Ex: 100' : '10'}
                     className="w-full px-3 py-1.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
                     required
                   />
@@ -1080,13 +1128,14 @@ export const EstoqueModule: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Estoque Mínimo (Alerta):
+                    {formUnit === 'm' ? 'Estoque Mínimo em Metros (Alerta):' : 'Estoque Mínimo (Alerta):'}
                   </label>
                   <input
                     type="number"
-                    step="1"
+                    step="any"
                     value={formMinStock}
                     onChange={(e) => setFormMinStock(e.target.value)}
+                    placeholder={formUnit === 'm' ? 'Ex: 20' : '5'}
                     className="w-full px-3 py-1.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
                     required
                   />
