@@ -171,6 +171,8 @@ export const RecursosHumanosModule: React.FC = () => {
   const [punchNewTime, setPunchNewTime] = useState<string>('');
   const [punchAdjustReason, setPunchAdjustReason] = useState<string>('');
   const [isDeletePunchAction, setIsDeletePunchAction] = useState<boolean>(false);
+  const [isUploadDocModalOpen, setIsUploadDocModalOpen] = useState<boolean>(false);
+  const [previewDoc, setPreviewDoc] = useState<EmployeeDocument | null>(null);
 
   const [isPrintMirrorModalOpen, setIsPrintMirrorModalOpen] = useState<boolean>(false);
   const [printUserId, setPrintUserId] = useState<string>('');
