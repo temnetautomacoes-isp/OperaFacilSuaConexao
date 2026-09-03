@@ -341,6 +341,8 @@ export const RecursosHumanosModule: React.FC = () => {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [timeRecords, pontoUserId, pontoMonth, pontoYear, pontoStatusFilter]);
 
+  const filteredTimeRecords = filteredActiveTimeRecords;
+
   // Filtered Deleted Time Records (Audit History)
   const filteredDeletedTimeRecords = useMemo(() => {
     return timeRecords.filter((r) => {
