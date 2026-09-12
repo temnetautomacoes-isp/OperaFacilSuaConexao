@@ -117,6 +117,49 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     };
   }, [zoom, panOffset, onPanChange, onZoomChange]);
 
+  // Global window listeners for drag & pan (ensures smooth, unrestricted movement across full screen)
+  useEffect(() => {
+    if (!draggingNodeId && !isPanning) return;
+
+    const onWindowMouseMove = (e: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      if (isPanning) {
+        onPanChange({
+          x: e.clientX - panStart.x,
+          y: e.clientY - panStart.y,
+        });
+        return;
+      }
+
+      if (draggingNodeId) {
+        let newX = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
+        let newY = (e.clientY - rect.top - panOffset.y) / zoom - dragOffset.y;
+
+        // Snap to 20px grid
+        newX = Math.round(newX / 20) * 20;
+        newY = Math.round(newY / 20) * 20;
+
+        // Unrestricted movement: allow placing items anywhere in the 2D infinite workspace
+        onMoveNode(draggingNodeId, newX, newY);
+      }
+    };
+
+    const onWindowMouseUp = () => {
+      setIsPanning(false);
+      setDraggingNodeId(null);
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [draggingNodeId, isPanning, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
+
   // Handle Canvas Mouse Down (Pan canvas or deselect)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
@@ -129,35 +172,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Handle Mouse Move (Dragging node or panning)
+  // Handle Mouse Move (Local cursor tracking for wire connections)
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
       const curX = (e.clientX - rect.left - panOffset.x) / zoom;
       const curY = (e.clientY - rect.top - panOffset.y) / zoom;
       setMousePos({ x: curX, y: curY });
-    }
-
-    if (isPanning) {
-      onPanChange({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      });
-      return;
-    }
-
-    if (draggingNodeId) {
-      const node = nodes.find((n) => n.id === draggingNodeId);
-      if (node && rect) {
-        let newX = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
-        let newY = (e.clientY - rect.top - panOffset.y) / zoom - dragOffset.y;
-
-        // Snap to 20px grid
-        newX = Math.round(newX / 20) * 20;
-        newY = Math.round(newY / 20) * 20;
-
-        onMoveNode(draggingNodeId, Math.max(20, newX), Math.max(20, newY));
-      }
     }
   };
 
