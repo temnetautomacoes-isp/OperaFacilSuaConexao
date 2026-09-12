@@ -246,6 +246,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onDeleteFolder={onDeleteFolder}
           onRenameFolder={onRenameFolder}
           onAddAssetToRack={handleOpenAddAssetToRack}
+          onOpenRackElevation={setRackElevationModalNode}
         />
 
         {/* Center: Canvas or Inventory Table */}
@@ -268,6 +269,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             onZoomChange={setZoom}
             selectedCableType={selectedCableType}
             isConnectingMode={isConnectingMode}
+            onOpenRackElevation={setRackElevationModalNode}
           />
         ) : (
           <div className="flex-1 bg-white overflow-y-auto p-6 space-y-6 select-none">

@@ -43,6 +43,7 @@ interface FolderTreeSidebarProps {
   onDeleteFolder: (folderId: string) => void;
   onRenameFolder: (folderId: string, newName: string) => void;
   onAddAssetToRack?: (rackNode: NetworkNode) => void;
+  onOpenRackElevation?: (rackNode: NetworkNode) => void;
 }
 
 export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
@@ -59,6 +60,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   onDeleteFolder,
   onRenameFolder,
   onAddAssetToRack,
+  onOpenRackElevation,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
@@ -300,6 +302,9 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectNode(rack.id);
+                      if (onOpenRackElevation) {
+                        onOpenRackElevation(rack);
+                      }
                     }}
                     style={{ paddingLeft: `${(level + 1) * 14 + 10}px` }}
                     className={`flex items-center justify-between py-1 pr-1.5 rounded-lg text-xs transition-all cursor-pointer group/rack ${

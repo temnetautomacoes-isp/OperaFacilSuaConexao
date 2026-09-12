@@ -48,6 +48,7 @@ interface NetworkCanvasProps {
   onZoomChange?: (zoom: number) => void;
   selectedCableType: string;
   isConnectingMode: boolean;
+  onOpenRackElevation?: (rackNode: NetworkNode) => void;
 }
 
 export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
@@ -68,6 +69,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   onZoomChange,
   selectedCableType,
   isConnectingMode,
+  onOpenRackElevation,
 }) => {
   // Folder visibility map
   const hiddenFolderIds = new Set(
@@ -207,6 +209,11 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
     onSelectNode(nodeId);
     setDraggingNodeId(nodeId);
+
+    const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
+    if (isRack && onOpenRackElevation) {
+      onOpenRackElevation(node);
+    }
 
     const rect = containerRef.current.getBoundingClientRect();
     const clickX = (e.clientX - rect.left - panOffset.x) / zoom;
@@ -548,12 +555,16 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   {node.name}
                 </span>
 
-                {/* Rack position tag if attached to a rack */}
-                {(node.parentRackId || node.rackPosition) && (
-                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-500/25 text-orange-300 border border-orange-500/40 mt-0.5 shadow-2xs">
-                    {node.rackPosition ? `[${node.rackPosition}]` : '[Rack]'}
+                {/* Rack position tag if attached to a rack or rack capacity badge */}
+                {isRack ? (
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-600/30 text-orange-300 border border-orange-500/50 mt-0.5 shadow-2xs">
+                    [{node.totalRackCapacityU || node.rackUnits || 44}U Rack]
                   </span>
-                )}
+                ) : (node.parentRackId || node.rackPosition) ? (
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-500/25 text-orange-300 border border-orange-500/40 mt-0.5 shadow-2xs">
+                    {node.rackPosition ? `[${node.rackPosition}]` : '[Ativo]'}
+                  </span>
+                ) : null}
 
                 {(node.managementIp || node.ip || node.hostname) && (
                   <span className="text-[9px] text-slate-400 font-mono mt-0.5 truncate max-w-[100px]">
