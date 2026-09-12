@@ -838,8 +838,9 @@ export const ColaboradorView: React.FC = () => {
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
                   className="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-orange-500"
                 >
-                  <option value={2025}>2025</option>
-                  <option value={2026}>2026</option>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((yr) => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
                 </select>
 
                 <button
