@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Product, UserAccount, CompanyDivision, EmployeeDocument, TimeClockRecord, FinancialEntry, Supplier } from '../types';
+import { TopologyData } from '../types/network';
 
 export interface GondolaCategoryItem {
   category: string;
@@ -432,5 +433,39 @@ export const supabaseService = {
 
   async deleteSupplier(id: string): Promise<void> {
     await supabase.from('suppliers').delete().eq('id', id);
+  },
+
+  // -------------------------------------------------------------
+  // NETWORK TOPOLOGY & FOLDERS
+  // -------------------------------------------------------------
+  async fetchNetworkTopology(): Promise<TopologyData | null> {
+    const { data, error } = await supabase.from('network_topology').select('*').limit(1).maybeSingle();
+    if (error || !data) return null;
+    return {
+      id: data.id || 'topo-main',
+      name: data.name || 'Topologia e Documentação de Rede',
+      description: data.description || '',
+      updatedAt: data.updated_at || new Date().toISOString(),
+      gridSnap: true,
+      folders: Array.isArray(data.folders) ? data.folders : [],
+      nodes: Array.isArray(data.nodes) ? data.nodes : [],
+      links: Array.isArray(data.links) ? data.links : [],
+    };
+  },
+
+  async saveNetworkTopology(topo: TopologyData): Promise<void> {
+    const { error } = await supabase.from('network_topology').upsert({
+      id: topo.id || 'topo-main',
+      name: topo.name || 'Topologia e Documentação de Rede',
+      description: topo.description || '',
+      folders: topo.folders || [],
+      nodes: topo.nodes || [],
+      links: topo.links || [],
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[SupabaseService] Erro ao salvar network_topology:', error);
+    }
   },
 };

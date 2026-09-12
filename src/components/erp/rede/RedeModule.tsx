@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FolderTree, 
   FlaskConical, 
@@ -9,10 +9,13 @@ import { INITIAL_TOPOLOGY, INITIAL_FOLDERS, DEVICE_CATALOG } from './initialNetw
 import { DocumentacaoRedeView } from './DocumentacaoRedeView';
 import { OficinaTestesView } from './OficinaTestesView';
 import { PacketTracerModal } from './PacketTracerModal';
+import { supabaseService } from '../../../services/supabaseService';
+import { supabase } from '../../../lib/supabase';
 
 export const RedeModule: React.FC = () => {
   // Main Sub-Tab: 'documentacao' (Primary / SGP TSMX) or 'oficina' (Testing & Simulator)
   const [activeSubTab, setActiveSubTab] = useState<'documentacao' | 'oficina'>('documentacao');
+  const isInitialLoad = useRef(true);
 
   // Helper to purge legacy example/mock data from localStorage
   const isMockData = (parsed: any): boolean => {
@@ -81,17 +84,89 @@ export const RedeModule: React.FC = () => {
   const [saveToast, setSaveToast] = useState(false);
   const [cliModalNode, setCliModalNode] = useState<NetworkNode | null>(null);
 
-  // Save topology to LocalStorage
+  // Initial cloud loading and Realtime sync
+  useEffect(() => {
+    async function loadCloudTopology() {
+      try {
+        const cloudTopo = await supabaseService.fetchNetworkTopology();
+        if (cloudTopo && (cloudTopo.folders.length > 0 || cloudTopo.nodes.length > 0 || cloudTopo.links.length > 0)) {
+          if (!isMockData(cloudTopo)) {
+            setFolders(cloudTopo.folders);
+            setNodes(cloudTopo.nodes);
+            setLinks(cloudTopo.links);
+            localStorage.setItem('operafacil_network_topology', JSON.stringify(cloudTopo));
+          }
+        } else {
+          // If cloud is empty but local has valid user data, sync local to cloud
+          const saved = localStorage.getItem('operafacil_network_topology');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (!isMockData(parsed) && (parsed.folders?.length > 0 || parsed.nodes?.length > 0)) {
+              supabaseService.saveNetworkTopology(parsed).catch(console.error);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar topologia do Supabase:', err);
+      }
+    }
+
+    loadCloudTopology();
+
+    // Supabase Realtime channel
+    const channel = supabase
+      .channel('realtime-network-topology')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'network_topology' }, async () => {
+        const fresh = await supabaseService.fetchNetworkTopology();
+        if (fresh && !isMockData(fresh)) {
+          setFolders(fresh.folders || []);
+          setNodes(fresh.nodes || []);
+          setLinks(fresh.links || []);
+          localStorage.setItem('operafacil_network_topology', JSON.stringify(fresh));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Automatic persistence (localStorage + Supabase Cloud) whenever folders, nodes, or links change
+  useEffect(() => {
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+
+    const topo: TopologyData = {
+      id: 'topo-main',
+      name: 'Topologia e Documentação de Rede',
+      description: 'Infraestrutura de rede, POPs e rotas ópticas.',
+      updatedAt: new Date().toISOString(),
+      gridSnap: true,
+      folders,
+      nodes,
+      links,
+    };
+
+    localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+    supabaseService.saveNetworkTopology(topo).catch(console.error);
+  }, [folders, nodes, links]);
+
+  // Save topology manually (with visual toast)
   const handleSaveTopology = () => {
     const data: TopologyData = {
-      id: 'topo-active',
+      id: 'topo-main',
       name: 'Topologia e Documentação de Rede',
       updatedAt: new Date().toISOString(),
+      gridSnap: true,
       folders,
       nodes,
       links,
     };
     localStorage.setItem('operafacil_network_topology', JSON.stringify(data));
+    supabaseService.saveNetworkTopology(data).catch(console.error);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 2500);
   };
