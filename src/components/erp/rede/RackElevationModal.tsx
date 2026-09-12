@@ -25,7 +25,9 @@ import {
   Info,
   Terminal,
   Search,
-  Check
+  Check,
+  GripVertical,
+  MoveVertical
 } from 'lucide-react';
 import { NetworkNode } from '../../../types/network';
 
@@ -64,6 +66,8 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   const [selectedInspectNodeId, setSelectedInspectNodeId] = useState<string | null>(mountedNodes[0]?.id || null);
   const [deviceToMountId, setDeviceToMountId] = useState<string>('');
   const [rackSearch, setRackSearch] = useState('');
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [dragOverU, setDragOverU] = useState<number | null>(null);
 
   // Calculate total power consumption
   const totalPowerWatts = mountedNodes.reduce((sum, n) => sum + (n.powerConsumptionWatts || 35), 0);
@@ -79,6 +83,39 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
       const height = n.rackUnits || 1;
       return startU <= u && u < startU + height;
     });
+  };
+
+  const handleMoveDeviceToSlot = (deviceId: string, targetU: number) => {
+    const targetDevice = allNodes.find(n => n.id === deviceId);
+    if (!targetDevice) return;
+
+    const currentUStr = targetDevice.rackPosition?.replace('U', '') || '';
+    const currentU = parseInt(currentUStr);
+    if (currentU === targetU) return;
+
+    // Check if there is already another device occupying targetU
+    const existingDeviceAtTarget = getMountedNodeAtU(targetU);
+
+    if (existingDeviceAtTarget && existingDeviceAtTarget.id !== deviceId) {
+      // Swap positions
+      const updatedExisting: NetworkNode = {
+        ...existingDeviceAtTarget,
+        parentRackId: rackNode.id,
+        rackPosition: `U${currentU || targetU}`,
+        location: `${rackNode.name} (U${currentU || targetU})`,
+      };
+      onUpdateNode(updatedExisting);
+    }
+
+    const updatedTarget: NetworkNode = {
+      ...targetDevice,
+      parentRackId: rackNode.id,
+      rackPosition: `U${targetU}`,
+      location: `${rackNode.name} (U${targetU})`,
+    };
+
+    onUpdateNode(updatedTarget);
+    setSelectedInspectNodeId(targetDevice.id);
   };
 
   const handleMountDevice = (u: number) => {
@@ -250,6 +287,21 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
               </span>
             </div>
 
+            {/* Helpful Drag & Drop Hint Banner */}
+            <div className="w-full max-w-2xl flex items-center justify-between gap-2 px-4 py-2 bg-slate-900/90 border border-slate-800 rounded-2xl mb-2 text-xs text-slate-300 shadow-md">
+              <div className="flex items-center gap-2">
+                <GripVertical className="w-4 h-4 text-orange-400 animate-pulse shrink-0" />
+                <span>
+                  <strong className="text-orange-400 font-bold">Arrastar & Soltar:</strong> Arraste qualquer ativo segurando nele para reposicionar entre os slots <strong>(U)</strong> ou trocar de lugar.
+                </span>
+              </div>
+              {draggedNodeId && (
+                <span className="text-[10px] font-mono font-bold text-orange-300 bg-orange-950 px-2 py-0.5 rounded-md border border-orange-800 animate-bounce">
+                  Solte no U desejado
+                </span>
+              )}
+            </div>
+
             {/* Server Rack Outer Enclosure */}
             <div className="w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 rounded-3xl border-4 border-slate-700/90 shadow-2xl p-2 flex flex-col">
               
@@ -295,6 +347,8 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                     const isInspected = nodeAtU && inspectedNode?.id === nodeAtU.id;
                     const nodeHeight = nodeAtU ? (nodeAtU.rackUnits || 1) : 1;
                     const slotHeightPx = Math.max(42, nodeHeight * 40);
+                    const isDragTarget = dragOverU === u;
+                    const isBeingDragged = nodeAtU && draggedNodeId === nodeAtU.id;
 
                     return (
                       <div
@@ -305,11 +359,37 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                             setSelectedInspectNodeId(nodeAtU.id);
                           }
                         }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverU !== u) {
+                            setDragOverU(u);
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                          if (dragOverU === u) {
+                            setDragOverU(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const droppedDeviceId = e.dataTransfer.getData('text/plain') || draggedNodeId;
+                          if (droppedDeviceId) {
+                            handleMoveDeviceToSlot(droppedDeviceId, u);
+                          }
+                          setDraggedNodeId(null);
+                          setDragOverU(null);
+                        }}
                         className={`rounded-xl border transition-all flex items-center px-2 sm:px-3 gap-2 relative ${
-                          nodeAtU
+                          isDragTarget
+                            ? 'border-orange-400 ring-4 ring-orange-500/40 bg-orange-500/20 shadow-xl shadow-orange-500/30 scale-[1.01] z-20'
+                            : isBeingDragged
+                            ? 'border-dashed border-orange-500/70 bg-slate-900/40 opacity-40'
+                            : nodeAtU
                             ? isInspected
                               ? 'border-orange-500 ring-2 ring-orange-500/50 shadow-xl bg-slate-900'
-                              : 'border-slate-700 hover:border-orange-400 bg-slate-900/90 shadow-md cursor-pointer'
+                              : 'border-slate-700 hover:border-orange-400 bg-slate-900/90 shadow-md'
                             : 'border-dashed border-slate-800/80 bg-slate-950 hover:bg-slate-900 hover:border-slate-700'
                         }`}
                       >
@@ -321,13 +401,30 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
 
                         {/* Equipment Faceplate or Empty Slot */}
                         {nodeAtU ? (
-                          <div className="flex-1 h-full flex items-center justify-between gap-3 overflow-hidden">
+                          <div
+                            draggable={true}
+                            onDragStart={(e) => {
+                              setDraggedNodeId(nodeAtU.id);
+                              e.dataTransfer.setData('text/plain', nodeAtU.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => {
+                              setDraggedNodeId(null);
+                              setDragOverU(null);
+                            }}
+                            className="flex-1 h-full flex items-center justify-between gap-3 overflow-hidden cursor-grab active:cursor-grabbing group/slot"
+                            title="Clique e arraste para mudar a posição U deste equipamento"
+                          >
                             
                             {/* Device Faceplate Rendering (Dell Server / Router / Switch / OLT Style) */}
                             <div className="flex-1 flex items-center gap-3 overflow-hidden">
                               
-                              {/* Left Handle & Status LED */}
+                              {/* Left Handle, Drag Grip & Status LED */}
                               <div className="flex items-center gap-1 shrink-0">
+                                <GripVertical 
+                                  className="w-4 h-4 text-slate-500 group-hover/slot:text-orange-400 transition-colors shrink-0" 
+                                  title="Segure e arraste para trocar de posição U"
+                                />
                                 <div className="w-1.5 h-6 rounded-full bg-slate-700 border border-slate-600" />
                                 <div className={`w-2 h-2 rounded-full ${
                                   nodeAtU.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
@@ -335,7 +432,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                               </div>
 
                               {/* Realistic Faceplate Details */}
-                              <div className="flex-1 flex items-center justify-between gap-2 overflow-hidden bg-black/40 rounded-lg p-1.5 border border-slate-800/80">
+                              <div className="flex-1 flex items-center justify-between gap-2 overflow-hidden bg-black/40 rounded-lg p-1.5 border border-slate-800/80 group-hover/slot:border-orange-500/50 transition-colors">
                                 <div className="flex items-center gap-2 overflow-hidden">
                                   {/* Equipment Type Icon */}
                                   <div className="w-6 h-6 rounded bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
@@ -407,9 +504,18 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                         ) : (
                           /* Empty Slot Row */
                           <div className="flex-1 flex items-center justify-between text-xs text-slate-600">
-                            <span className="font-mono text-[10px] text-slate-600 italic">
-                              -- Slot U{u} Vazio --
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {isDragTarget && draggedNodeId ? (
+                                <span className="font-mono text-xs text-orange-300 font-bold flex items-center gap-1.5 animate-pulse">
+                                  <MoveVertical className="w-3.5 h-3.5" />
+                                  ⚡ Solte aqui para mover para U{u}
+                                </span>
+                              ) : (
+                                <span className="font-mono text-[10px] text-slate-600 italic">
+                                  -- Slot U{u} Vazio --
+                                </span>
+                              )}
+                            </div>
 
                             <div className="flex items-center gap-2">
                               {onAddNewAssetToSlot && (
