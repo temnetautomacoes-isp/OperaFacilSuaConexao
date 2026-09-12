@@ -48,6 +48,8 @@ import {
 } from 'lucide-react';
 import { BiometricSelfieModal } from '../common/BiometricSelfieModal';
 import { JustifyAbsenceModal } from './JustifyAbsenceModal';
+import { CompanyInfoModal } from '../common/CompanyInfoModal';
+import logoImg from '../../assets/operafacil_logo.png';
 
 type ColaboradorTab = 'ponto' | 'folha' | 'documentos' | 'perfil';
 
@@ -75,6 +77,7 @@ export const ColaboradorView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ColaboradorTab>('ponto');
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
+  const [showCompanyInfo, setShowCompanyInfo] = useState<boolean>(false);
   
   // Ponto Form State
   const [selectedLocation, setSelectedLocation] = useState<string>('Sede Central NOC / Matriz');
@@ -319,25 +322,55 @@ export const ColaboradorView: React.FC = () => {
         {/* Top Section / Navigation Tabs */}
         <div className="p-4 space-y-3">
           
-          {/* Section Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
-                CL
+          {/* Section Header with Company Logo & Live Clock */}
+          <div className="flex flex-col gap-2.5 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowCompanyInfo(true)}
+                title={`Clique para ver informações da empresa (${settings.name || 'Empresa'})`}
+                className="flex items-center gap-2.5 group cursor-pointer text-left overflow-hidden"
+              >
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-white border border-slate-200 shadow-2xs group-hover:border-orange-400 group-hover:shadow-xs transition-all shrink-0 p-1">
+                  <img
+                    src={settings.logoUrl || logoImg}
+                    alt={settings.name || 'OperaFácil'}
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                    onError={(e) => {
+                      (e.target as HTMLElement).src = logoImg;
+                    }}
+                  />
+                </div>
+                <div className="overflow-hidden">
+                  <h3 className="font-black text-xs text-slate-900 leading-tight group-hover:text-orange-600 transition-colors truncate">
+                    {settings.name || 'OperaFácil'}
+                  </h3>
+                  <span className="text-[10px] text-orange-600 font-bold tracking-tight block truncate">
+                    Portal do Colaborador
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+                className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Clock & Date */}
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-orange-50/80 border border-orange-200/70 text-xs shadow-2xs">
+              <div className="flex items-center gap-1.5 text-orange-700 font-bold text-[10px] uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="capitalize">{formattedDate.split(',')[0]}</span>
               </div>
-              <div>
-                <h3 className="font-extrabold text-xs text-slate-900 leading-none">Portal do Colaborador</h3>
-                <span className="text-[10px] text-slate-400 font-medium">Autoatendimento ISP</span>
+              <div className="flex items-center gap-1 font-mono font-black text-[11px] text-slate-800">
+                <Clock className="w-3 h-3 text-orange-500 shrink-0" />
+                <span>{formattedTime}</span>
               </div>
             </div>
-            
-            <button
-              type="button"
-              onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-              className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-lg"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Navigation Buttons */}
@@ -1783,6 +1816,12 @@ export const ColaboradorView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Company Info Modal */}
+      <CompanyInfoModal
+        isOpen={showCompanyInfo}
+        onClose={() => setShowCompanyInfo(false)}
+      />
 
     </div>
   );

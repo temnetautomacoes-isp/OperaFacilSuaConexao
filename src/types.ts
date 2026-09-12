@@ -172,6 +172,7 @@ export interface UserPermissions {
   canAccessPdv?: boolean;
   canAccessEstoque: boolean;
   canAccessRh?: boolean;
+  canAccessRede?: boolean;
   canAccessPrevencaoPerdas?: boolean;
   canAccessVendas?: boolean;
   canAccessFinanceiro: boolean;

@@ -14,12 +14,12 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8F9FF] text-slate-800 antialiased font-sans select-none">
+    <div className="h-screen max-h-screen flex flex-col bg-[#F8F9FF] text-slate-800 antialiased font-sans select-none overflow-hidden">
       {/* Top Header Bar */}
       <TopBar />
 
       {/* Main Workspace Area (Colaborador or ERP) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
         {environment === 'colaborador' || environment === 'pdv' ? <ColaboradorView /> : <ErpView />}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { VendasModule } from './VendasModule';
 import { FinanceiroModule } from './FinanceiroModule';
 import { ConfiguracoesModule } from './ConfiguracoesModule';
 import { RecursosHumanosModule } from './RecursosHumanosModule';
+import { RedeModule } from './rede/RedeModule';
 import { 
   LayoutDashboard, 
   Package, 
@@ -19,15 +20,20 @@ export const ErpView: React.FC = () => {
   const { erpModule, setErpModule, setMobileSidebarOpen } = useApp();
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F8F9FF] h-full lg:h-[calc(100vh-58px)] relative">
+    <div className="flex-1 min-h-0 h-full flex flex-col lg:flex-row overflow-hidden bg-[#F8F9FF] relative">
       {/* Fixed/Responsive Left Navigation Sidebar */}
       <ErpSidebar />
 
       {/* Dynamic Module Content Area */}
-      <main className="flex-1 overflow-y-auto w-full pb-20 lg:pb-4 p-2 sm:p-4 lg:p-6 transition-all">
+      <main className={`flex-1 min-h-0 w-full h-full transition-all ${
+        erpModule === 'rede' 
+          ? 'overflow-hidden p-0' 
+          : 'overflow-y-auto pb-20 lg:pb-4 p-2 sm:p-4 lg:p-6'
+      }`}>
         {erpModule === 'dashboard' && <DashboardModule />}
         {erpModule === 'estoque' && <EstoqueModule />}
         {erpModule === 'rh' && <RecursosHumanosModule />}
+        {erpModule === 'rede' && <RedeModule />}
         {erpModule === 'vendas' && <VendasModule />}
         {erpModule === 'financeiro' && <FinanceiroModule />}
         {erpModule === 'relatorios' && <FinanceiroModule />}

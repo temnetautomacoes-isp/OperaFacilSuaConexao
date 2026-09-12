@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   LayoutDashboard, 
@@ -8,11 +8,15 @@ import {
   Sparkles, 
   AlertTriangle,
   Users,
+  Network,
   ChevronLeft,
   ChevronRight,
   X,
-  LogOut
+  LogOut,
+  Clock
 } from 'lucide-react';
+import { CompanyInfoModal } from '../common/CompanyInfoModal';
+import logoImg from '../../assets/operafacil_logo.png';
 
 export const ErpSidebar: React.FC = () => {
   const { 
@@ -28,6 +32,24 @@ export const ErpSidebar: React.FC = () => {
     isMobileSidebarOpen,
     setMobileSidebarOpen
   } = useApp();
+
+  const [showCompanyInfo, setShowCompanyInfo] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const weekdayStr = currentDateTime.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  const dateStr = currentDateTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const timeStr = currentDateTime.toLocaleTimeString('pt-BR', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit' 
+  });
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
 
@@ -46,6 +68,12 @@ export const ErpSidebar: React.FC = () => {
       icon: <Users className="w-5 h-5 shrink-0" />, 
       badge: users.length > 0 ? users.length : undefined,
       allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessRh !== false,
+    },
+    { 
+      id: 'rede' as const, 
+      label: 'Rede', 
+      icon: <Network className="w-5 h-5 shrink-0" />, 
+      allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessRede !== false,
     },
     { 
       id: 'configuracoes' as const, 
@@ -80,39 +108,85 @@ export const ErpSidebar: React.FC = () => {
           ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
         `}
       >
-        {/* Top Sidebar Header with Collapse Button & Mobile Close Button */}
+        {/* Top Sidebar Header with Company Logo, Live Clock & Collapse Button */}
         <div className="flex-1 overflow-y-auto">
           {/* Header Bar */}
-          <div className="p-3 border-b border-slate-100 flex items-center justify-between">
-            <div className={`flex items-center gap-2 overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
-              <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                OP
-              </div>
-              <span className="font-black text-xs uppercase tracking-wider text-slate-800 truncate">
-                Menu Gestão
-              </span>
+          <div className="p-3 border-b border-slate-100 flex flex-col gap-2.5 bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              {/* Company Logo & Brand Name */}
+              <button
+                type="button"
+                id="btn-sidebar-company-logo"
+                onClick={() => setShowCompanyInfo(true)}
+                title={`Clique para ver informações da empresa (${settings.name || 'Empresa'})`}
+                className={`flex items-center gap-2.5 group cursor-pointer text-left overflow-hidden ${isSidebarCollapsed ? 'lg:justify-center w-full' : ''}`}
+              >
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-white border border-slate-200 shadow-2xs group-hover:border-orange-400 group-hover:shadow-xs transition-all shrink-0 p-1">
+                  <img
+                    src={settings.logoUrl || logoImg}
+                    alt={settings.name || 'OperaFácil'}
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                    onError={(e) => {
+                      (e.target as HTMLElement).src = logoImg;
+                    }}
+                  />
+                </div>
+
+                <div className={`overflow-hidden ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                  <h3 className="font-black text-xs text-slate-900 leading-tight group-hover:text-orange-600 transition-colors truncate">
+                    {settings.name || 'OperaFácil'}
+                  </h3>
+                  <span className="text-[10px] text-orange-600 font-bold tracking-tight block truncate">
+                    Gestão & Operação
+                  </span>
+                </div>
+              </button>
+
+              {/* Mobile Close Button (X) */}
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                title="Fechar Menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Desktop Collapse Button */}
+              <button
+                type="button"
+                id="btn-toggle-sidebar"
+                onClick={toggleSidebar}
+                className={`hidden lg:flex p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer ml-auto ${isSidebarCollapsed ? 'hidden' : ''}`}
+                title="Minimizar barra lateral"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Mobile Close Button (X) */}
-            <button
-              type="button"
-              onClick={() => setMobileSidebarOpen(false)}
-              className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              title="Fechar Menu"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* If Collapsed on Desktop, show Expand Button */}
+            {isSidebarCollapsed && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="hidden lg:flex items-center justify-center p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer mx-auto w-full"
+                title="Expandir barra lateral"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
 
-            {/* Desktop Collapse / Expand Button */}
-            <button
-              type="button"
-              id="btn-toggle-sidebar"
-              onClick={toggleSidebar}
-              className="hidden lg:flex p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer ml-auto"
-              title={isSidebarCollapsed ? 'Expandir barra lateral' : 'Minimizar barra lateral (liberar espaço)'}
-            >
-              {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            </button>
+            {/* Live Clock & Date Widget */}
+            <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-orange-50/80 border border-orange-200/70 text-xs shadow-2xs ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>
+              <div className="flex items-center gap-1.5 text-orange-700 font-bold text-[10px] uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="capitalize">{weekdayStr}, {dateStr}</span>
+              </div>
+              <div className="flex items-center gap-1 font-mono font-black text-[11px] text-slate-800">
+                <Clock className="w-3 h-3 text-orange-500 shrink-0" />
+                <span>{timeStr}</span>
+              </div>
+            </div>
           </div>
 
           {/* Quick Action: Financeiro */}
@@ -195,6 +269,12 @@ export const ErpSidebar: React.FC = () => {
           </button>
         </div>
       </aside>
+
+      {/* Company Info Modal */}
+      <CompanyInfoModal
+        isOpen={showCompanyInfo}
+        onClose={() => setShowCompanyInfo(false)}
+      />
     </>
   );
 };
