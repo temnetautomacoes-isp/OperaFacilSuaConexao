@@ -493,6 +493,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
       <RackElevationModal
         rackNode={rackElevationModalNode}
         allNodes={nodes}
+        folders={folders}
         onUpdateNode={onUpdateNode}
         onAddNewAssetToSlot={(slotU) => {
           if (rackElevationModalNode) {
