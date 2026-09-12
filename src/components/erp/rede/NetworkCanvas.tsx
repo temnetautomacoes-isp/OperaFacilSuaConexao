@@ -548,6 +548,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   {node.name}
                 </span>
 
+                {/* Rack position tag if attached to a rack */}
+                {(node.parentRackId || node.rackPosition) && (
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-500/25 text-orange-300 border border-orange-500/40 mt-0.5 shadow-2xs">
+                    {node.rackPosition ? `[${node.rackPosition}]` : '[Rack]'}
+                  </span>
+                )}
+
                 {(node.managementIp || node.ip || node.hostname) && (
                   <span className="text-[9px] text-slate-400 font-mono mt-0.5 truncate max-w-[100px]">
                     {node.managementIp || node.ip || node.hostname}

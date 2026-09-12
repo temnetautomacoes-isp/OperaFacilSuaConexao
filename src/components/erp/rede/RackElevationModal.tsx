@@ -25,6 +25,7 @@ interface RackElevationModalProps {
   rackNode: NetworkNode | null;
   allNodes: NetworkNode[];
   onUpdateNode: (node: NetworkNode) => void;
+  onAddNewAssetToSlot?: (slotU: number) => void;
   onClose: () => void;
 }
 
@@ -32,6 +33,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   rackNode,
   allNodes,
   onUpdateNode,
+  onAddNewAssetToSlot,
   onClose,
 }) => {
   if (!rackNode) return null;
@@ -193,24 +195,37 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
             </div>
           </div>
 
-          {/* Quick Mount helper */}
-          {availableNodesToMount.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-400">Instalar no Rack:</span>
-              <select
-                value={deviceToMountId}
-                onChange={(e) => setDeviceToMountId(e.target.value)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 border border-slate-700 text-slate-200 cursor-pointer"
+          <div className="flex items-center gap-3">
+            {/* Quick Mount helper */}
+            {availableNodesToMount.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400">Instalar Existente:</span>
+                <select
+                  value={deviceToMountId}
+                  onChange={(e) => setDeviceToMountId(e.target.value)}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 border border-slate-700 text-slate-200 cursor-pointer"
+                >
+                  <option value="">Selecione Equipamento...</option>
+                  {availableNodesToMount.map(n => (
+                    <option key={n.id} value={n.id}>
+                      {n.name} ({n.model} - {n.rackUnits || 1}U)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {onAddNewAssetToSlot && (
+              <button
+                type="button"
+                onClick={() => onAddNewAssetToSlot(slots[0] || 42)}
+                className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
               >
-                <option value="">Selecione um Equipamento...</option>
-                {availableNodesToMount.map(n => (
-                  <option key={n.id} value={n.id}>
-                    {n.name} ({n.model} - {n.rackUnits || 1}U)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                <Plus className="w-3.5 h-3.5" />
+                + Novo Ativo no Rack
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Body / 19" Rack Rails View */}
@@ -303,17 +318,30 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                     ) : (
                       /* Empty Slot */
                       <div className="flex-1 flex items-center justify-between text-xs text-slate-600">
-                        <span className="font-mono text-[11px] italic">-- Slot Vazio --</span>
-                        {deviceToMountId && (
-                          <button
-                            type="button"
-                            onClick={() => handleMountDevice(u)}
-                            className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            Instalar Aqui
-                          </button>
-                        )}
+                        <span className="font-mono text-[11px] italic text-slate-500">-- Slot Vazio --</span>
+                        <div className="flex items-center gap-2">
+                          {onAddNewAssetToSlot && (
+                            <button
+                              type="button"
+                              onClick={() => onAddNewAssetToSlot(u)}
+                              className="px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-orange-600 text-slate-400 hover:text-white font-bold text-[10px] flex items-center gap-1 border border-slate-700 hover:border-orange-500 transition-colors cursor-pointer"
+                              title={`Criar novo ativo e instalar no slot U${u}`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              Novo Ativo U{u}
+                            </button>
+                          )}
+                          {deviceToMountId && (
+                            <button
+                              type="button"
+                              onClick={() => handleMountDevice(u)}
+                              className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Instalar Aqui
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

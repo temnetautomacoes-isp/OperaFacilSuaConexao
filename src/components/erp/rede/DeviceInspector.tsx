@@ -30,6 +30,7 @@ interface DeviceInspectorProps {
   onDeleteLink: (linkId: string) => void;
   onOpenCli: (node: NetworkNode) => void;
   onOpenRackElevation?: (rackNode: NetworkNode) => void;
+  onAddAssetToRack?: (rackNode: NetworkNode) => void;
   onClose: () => void;
 }
 
@@ -44,6 +45,7 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
   onDeleteLink,
   onOpenCli,
   onOpenRackElevation,
+  onAddAssetToRack,
   onClose,
 }) => {
   if (!selectedNode && !selectedLink) return null;
@@ -292,22 +294,36 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                 </div>
               </div>
 
-              {/* If Selected Node is a Rack: Quick Rack Elevation Button */}
-              {isRack && onOpenRackElevation && (
-                <div className="p-3 bg-gradient-to-r from-orange-500 to-amber-600 rounded-2xl text-white shadow-md space-y-2">
+              {/* If Selected Node is a Rack: Quick Rack Elevation & Add Asset Buttons */}
+              {isRack && (
+                <div className="p-3.5 bg-gradient-to-r from-orange-500 to-amber-600 rounded-2xl text-white shadow-md space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-wider">Painel do Rack 19"</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20">
                       {mountedDevicesInThisRack.length} Equipamentos
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenRackElevation(selectedNode)}
-                    className="w-full py-2 px-3 rounded-xl bg-white text-orange-950 font-black text-xs hover:bg-orange-50 shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    📐 Abrir Elevação Visual do Rack ({selectedNode.totalRackCapacityU || selectedNode.rackUnits || 44}U)
-                  </button>
+
+                  {onAddAssetToRack && (
+                    <button
+                      type="button"
+                      onClick={() => onAddAssetToRack(selectedNode)}
+                      className="w-full py-2 px-3 rounded-xl bg-orange-950 hover:bg-black text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer border border-orange-800"
+                    >
+                      <Plus className="w-4 h-4 text-orange-400" />
+                      ➕ Adicionar Ativo a este Rack
+                    </button>
+                  )}
+
+                  {onOpenRackElevation && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenRackElevation(selectedNode)}
+                      className="w-full py-2 px-3 rounded-xl bg-white text-orange-950 font-black text-xs hover:bg-orange-50 shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      📐 Abrir Elevação Visual ({selectedNode.totalRackCapacityU || selectedNode.rackUnits || 44}U)
+                    </button>
+                  )}
                 </div>
               )}
 

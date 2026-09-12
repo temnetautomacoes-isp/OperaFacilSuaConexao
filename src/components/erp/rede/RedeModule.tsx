@@ -203,23 +203,32 @@ export const RedeModule: React.FC = () => {
 
   // Add Device from Palette or Custom Modal
   const handleAddDevice = (deviceData: any) => {
+    const parentRack = deviceData.parentRackId ? nodes.find(n => n.id === deviceData.parentRackId) : null;
+    const defaultX = parentRack ? parentRack.x + 130 : (280 + Math.floor(Math.random() * 200));
+    const defaultY = parentRack ? parentRack.y + 40 + Math.floor(Math.random() * 40) : (180 + Math.floor(Math.random() * 150));
+
     const newNode: NetworkNode = {
       id: `node-${Date.now()}`,
-      folderId: deviceData.folderId !== undefined ? deviceData.folderId : (selectedFolderId || undefined),
+      folderId: deviceData.folderId !== undefined ? deviceData.folderId : (parentRack?.folderId || selectedFolderId || undefined),
       name: deviceData.name,
       hostname: deviceData.hostname || `${(deviceData.type || 'DEV').toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
       type: deviceData.type || 'switch_core',
       category: deviceData.category || 'isp_core',
-      x: deviceData.x !== undefined ? deviceData.x : (280 + Math.floor(Math.random() * 200)),
-      y: deviceData.y !== undefined ? deviceData.y : (180 + Math.floor(Math.random() * 150)),
+      x: deviceData.x !== undefined ? deviceData.x : defaultX,
+      y: deviceData.y !== undefined ? deviceData.y : defaultY,
       ip: deviceData.ip || deviceData.managementIp || `192.168.${nodes.length + 1}.1`,
       managementIp: deviceData.managementIp || deviceData.ip,
       mac: deviceData.mac,
       model: deviceData.model || deviceData.name,
       vendor: deviceData.vendor || 'Genérico',
-      location: deviceData.location || (selectedFolderId ? folders.find(f => f.id === selectedFolderId)?.name || 'POP Central' : 'POP Central'),
+      location: deviceData.location || (parentRack ? `${parentRack.name} (${deviceData.rackPosition || 'U1'})` : (selectedFolderId ? folders.find(f => f.id === selectedFolderId)?.name || 'POP Central' : 'POP Central')),
+      parentRackId: deviceData.parentRackId,
+      powerSourceNodeId: deviceData.powerSourceNodeId,
       rackUnits: deviceData.rackUnits || 1,
       rackPosition: deviceData.rackPosition,
+      totalRackCapacityU: deviceData.totalRackCapacityU,
+      capacityVa: deviceData.capacityVa,
+      totalOutlets: deviceData.totalOutlets,
       serialNumber: deviceData.serialNumber,
       powerSupply: deviceData.powerSupply || 'AC 110/220V Bivolt',
       powerConsumptionWatts: deviceData.powerConsumptionWatts,

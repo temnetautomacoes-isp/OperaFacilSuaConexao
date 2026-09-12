@@ -47,6 +47,8 @@ interface NewAssetModalProps {
   folders: NetworkFolder[];
   defaultFolderId: string | null;
   allNodes?: NetworkNode[];
+  initialParentRackId?: string | null;
+  initialRackPosition?: string | null;
   onClose: () => void;
   onAddDevice: (node: Partial<NetworkNode>) => void;
 }
@@ -56,6 +58,8 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
   folders,
   defaultFolderId,
   allNodes = [],
+  initialParentRackId,
+  initialRackPosition,
   onClose,
   onAddDevice,
 }) => {
@@ -63,6 +67,8 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
 
   const existingRacks = allNodes.filter(n => n.type === 'rack_floor' || n.type === 'rack_wall' || n.type === 'rack_19');
   const existingPowerSources = allNodes.filter(n => n.type === 'ups_nobreak' || n.type === 'pdu_power_strip' || n.type === 'rectifier_power' || n.type === 'electrical_outlet');
+
+  const initialRackNode = initialParentRackId ? allNodes.find(n => n.id === initialParentRackId) : null;
 
   const [activeTab, setActiveTab] = useState<'catalog' | 'custom'>('custom');
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -79,12 +85,12 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
   const [category, setCategory] = useState<DeviceCategory>('isp_core');
   const [vendor, setVendor] = useState('MikroTik');
   const [model, setModel] = useState('');
-  const [folderId, setFolderId] = useState<string>(defaultFolderId || folders[0]?.id || '');
-  const [location, setLocation] = useState('POP Central - Rack 01');
-  const [parentRackId, setParentRackId] = useState<string>('');
+  const [folderId, setFolderId] = useState<string>(initialRackNode?.folderId || defaultFolderId || folders[0]?.id || '');
+  const [location, setLocation] = useState(initialRackNode ? `${initialRackNode.name} (${initialRackPosition || 'U42'})` : 'POP Central - Rack 01');
+  const [parentRackId, setParentRackId] = useState<string>(initialParentRackId || '');
   const [powerSourceNodeId, setPowerSourceNodeId] = useState<string>('');
   const [rackUnits, setRackUnits] = useState<number>(1);
-  const [rackPosition, setRackPosition] = useState('U38');
+  const [rackPosition, setRackPosition] = useState(initialRackPosition || 'U42');
   const [totalRackCapacityU, setTotalRackCapacityU] = useState<number>(44);
   const [capacityVa, setCapacityVa] = useState<number>(3000);
   const [totalOutlets, setTotalOutlets] = useState<number>(8);
@@ -447,8 +453,11 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
       vendor: item.vendor,
       model: item.model,
       folderId: folderId || defaultFolderId || folders[0]?.id || undefined,
-      location: 'POP Central - Rack 01',
+      location: parentRackId ? `${allNodes.find(n => n.id === parentRackId)?.name || 'Rack'} (${rackPosition || 'U42'})` : location,
+      parentRackId: parentRackId || undefined,
+      powerSourceNodeId: powerSourceNodeId || undefined,
       rackUnits: item.rackUnits || 1,
+      rackPosition: rackPosition || 'U42',
       totalRackCapacityU: (item as any).totalRackCapacityU,
       capacityVa: (item as any).capacityVa,
       totalOutlets: (item as any).totalOutlets,

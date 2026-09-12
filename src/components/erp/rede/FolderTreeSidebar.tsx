@@ -42,6 +42,7 @@ interface FolderTreeSidebarProps {
   onCreateFolder: (name: string, parentId: string | null) => void;
   onDeleteFolder: (folderId: string) => void;
   onRenameFolder: (folderId: string, newName: string) => void;
+  onAddAssetToRack?: (rackNode: NetworkNode) => void;
 }
 
 export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
@@ -57,6 +58,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   onCreateFolder,
   onDeleteFolder,
   onRenameFolder,
+  onAddAssetToRack,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
@@ -132,6 +134,18 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     }
   };
 
+  const [expandedRacks, setExpandedRacks] = useState<Record<string, boolean>>({});
+
+  const toggleRackExpand = (rackId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedRacks(prev => ({
+      ...prev,
+      [rackId]: prev[rackId] === undefined ? false : !prev[rackId],
+    }));
+  };
+
+  const isRackNode = (n: NetworkNode) => n.type === 'rack_floor' || n.type === 'rack_wall' || n.type === 'rack_19';
+
   // Render a folder branch recursively
   const renderFolderItem = (folder: NetworkFolder, level: number = 0) => {
     const isExpanded = !!expandedFolders[folder.id];
@@ -139,6 +153,10 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     const subfolders = getSubfolders(folder.id);
     const folderNodes = getFolderNodes(folder.id);
     const isVisible = folder.visible !== false;
+
+    // Split folder nodes into racks and standalone nodes (excluding nodes mounted inside a rack)
+    const rackNodes = folderNodes.filter(isRackNode);
+    const standaloneNodes = folderNodes.filter(n => !isRackNode(n) && !n.parentRackId);
 
     const hasChildren = subfolders.length > 0 || folderNodes.length > 0;
 
@@ -263,14 +281,139 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
           </div>
         </div>
 
-        {/* Sub-items (Subfolders & Nodes) */}
+        {/* Sub-items (Subfolders, Racks with Mounted Assets, and Standalone Nodes) */}
         {isExpanded && (
           <div className="space-y-0.5">
             {/* Subfolders */}
             {subfolders.map((sub) => renderFolderItem(sub, level + 1))}
 
-            {/* Nodes inside this folder */}
-            {folderNodes.map((node) => {
+            {/* Rack Nodes with Sub-tree for Mounted Assets */}
+            {rackNodes.map((rack) => {
+              const isRackSelected = selectedNodeId === rack.id;
+              const mountedAssets = nodes.filter(n => n.parentRackId === rack.id);
+              const isRackOpen = expandedRacks[rack.id] !== false; // default expanded
+
+              return (
+                <div key={rack.id} className="space-y-0.5">
+                  {/* Rack Header Item */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectNode(rack.id);
+                    }}
+                    style={{ paddingLeft: `${(level + 1) * 14 + 10}px` }}
+                    className={`flex items-center justify-between py-1 pr-1.5 rounded-lg text-xs transition-all cursor-pointer group/rack ${
+                      isRackSelected
+                        ? 'bg-orange-600 text-white font-black shadow-xs'
+                        : 'hover:bg-orange-50/70 text-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+                      {/* Rack Expand/Collapse arrow */}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleRackExpand(rack.id, e)}
+                        className={`p-0.5 rounded hover:bg-black/10 transition-colors ${
+                          isRackSelected ? 'text-white' : 'text-slate-400'
+                        }`}
+                        title={isRackOpen ? 'Recolher Ativos do Rack' : 'Expandir Ativos do Rack'}
+                      >
+                        {mountedAssets.length > 0 ? (
+                          isRackOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
+                        ) : (
+                          <span className="w-3 inline-block" />
+                        )}
+                      </button>
+
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${
+                        rack.status === 'online' ? 'bg-emerald-500' : 'bg-amber-400'
+                      }`} />
+
+                      <span className="truncate text-[11px] font-bold">
+                        {rack.name}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Mounted Count Badge */}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                        isRackSelected ? 'bg-orange-700 text-orange-100' : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {mountedAssets.length} {mountedAssets.length === 1 ? 'ativo' : 'ativos'}
+                      </span>
+
+                      {/* Add Asset to Rack Button */}
+                      {onAddAssetToRack && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddAssetToRack(rack);
+                          }}
+                          className={`p-1 rounded transition-colors ${
+                            isRackSelected
+                              ? 'text-white hover:bg-orange-700'
+                              : 'text-orange-600 hover:bg-orange-100'
+                          }`}
+                          title={`Adicionar Ativo ao Rack "${rack.name}"`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Nested Mounted Assets in this Rack */}
+                  {isRackOpen && mountedAssets.length > 0 && (
+                    <div className="space-y-0.5">
+                      {mountedAssets.map((asset) => {
+                        const isAssetSelected = selectedNodeId === asset.id;
+                        return (
+                          <div
+                            key={asset.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectNode(asset.id);
+                            }}
+                            style={{ paddingLeft: `${(level + 1) * 14 + 28}px` }}
+                            className={`flex items-center justify-between py-1 pr-2 rounded-lg text-xs transition-all cursor-pointer ${
+                              isAssetSelected
+                                ? 'bg-orange-500 text-white font-black shadow-xs'
+                                : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                asset.status === 'online' ? 'bg-emerald-500' : 'bg-amber-400'
+                              }`} />
+                              <span className={`text-[9px] font-mono font-black px-1 py-0.2 rounded shrink-0 ${
+                                isAssetSelected
+                                  ? 'bg-orange-700 text-white'
+                                  : 'bg-orange-100 text-orange-800'
+                              }`}>
+                                {asset.rackPosition || 'U1'}
+                              </span>
+                              <span className="truncate text-[11px] font-medium">
+                                {asset.name}
+                              </span>
+                            </div>
+
+                            <span className={`text-[9px] font-mono shrink-0 ${
+                              isAssetSelected ? 'text-orange-100' : 'text-slate-400'
+                            }`}>
+                              {asset.managementIp || asset.ip}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Standalone Nodes inside this folder */}
+            {standaloneNodes.map((node) => {
               const isNodeSelected = selectedNodeId === node.id;
               return (
                 <div

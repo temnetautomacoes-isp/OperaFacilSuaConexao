@@ -88,7 +88,13 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
   const [rackElevationModalNode, setRackElevationModalNode] = useState<NetworkNode | null>(null);
+  const [targetRackForNewAsset, setTargetRackForNewAsset] = useState<{ rack: NetworkNode; slotU?: number } | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const handleOpenAddAssetToRack = (rackNode: NetworkNode, slotU?: number) => {
+    setTargetRackForNewAsset({ rack: rackNode, slotU });
+    setIsAddDeviceModalOpen(true);
+  };
 
   const activeFolder = folders.find(f => f.id === selectedFolderId) || folders[0] || null;
 
@@ -193,7 +199,10 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsAddDeviceModalOpen(true)}
+            onClick={() => {
+              setTargetRackForNewAsset(null);
+              setIsAddDeviceModalOpen(true);
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -236,6 +245,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onCreateFolder={onCreateFolder}
           onDeleteFolder={onDeleteFolder}
           onRenameFolder={onRenameFolder}
+          onAddAssetToRack={handleOpenAddAssetToRack}
         />
 
         {/* Center: Canvas or Inventory Table */}
@@ -450,6 +460,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onDeleteLink={onDeleteLink}
           onOpenCli={onOpenCli}
           onOpenRackElevation={setRackElevationModalNode}
+          onAddAssetToRack={handleOpenAddAssetToRack}
           onClose={() => {
             onSelectNode(null);
             onSelectLink(null);
@@ -461,12 +472,18 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
       <NewAssetModal
         isOpen={isAddDeviceModalOpen}
         folders={folders}
-        defaultFolderId={selectedFolderId}
+        defaultFolderId={targetRackForNewAsset?.rack.folderId || selectedFolderId}
         allNodes={nodes}
-        onClose={() => setIsAddDeviceModalOpen(false)}
+        initialParentRackId={targetRackForNewAsset?.rack.id}
+        initialRackPosition={targetRackForNewAsset?.slotU ? `U${targetRackForNewAsset.slotU}` : undefined}
+        onClose={() => {
+          setIsAddDeviceModalOpen(false);
+          setTargetRackForNewAsset(null);
+        }}
         onAddDevice={(node) => {
           onAddDevice(node as any);
           setIsAddDeviceModalOpen(false);
+          setTargetRackForNewAsset(null);
         }}
       />
 
@@ -475,6 +492,11 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
         rackNode={rackElevationModalNode}
         allNodes={nodes}
         onUpdateNode={onUpdateNode}
+        onAddNewAssetToSlot={(slotU) => {
+          if (rackElevationModalNode) {
+            handleOpenAddAssetToRack(rackElevationModalNode, slotU);
+          }
+        }}
         onClose={() => setRackElevationModalNode(null)}
       />
     </div>
