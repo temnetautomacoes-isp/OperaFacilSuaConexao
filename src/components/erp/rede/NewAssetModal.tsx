@@ -455,34 +455,11 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     localStorage.setItem('operafacil_saved_asset_templates', JSON.stringify(updated));
   };
 
-  // Active Catalog Items only (filtering out any passive items)
-  const activeCatalogList = DEVICE_CATALOG.filter(c => {
-    const isPassive = c.category === 'passive' || c.category === 'cabling_structure' || c.type.includes('rack') || c.type.includes('dio') || c.type.includes('cto') || c.type.includes('ceo') || c.type.includes('organizer') || c.type.includes('blank') || c.type.includes('tray') || c.type.includes('splitter');
-    return !isPassive;
-  });
-
-  // Filtered Templates + Active Catalog
-  const allAvailableTemplates = [
-    ...savedTemplates.map(t => ({ ...t, type: t.deviceType })),
-    ...activeCatalogList.map(c => ({
-      id: `cat-${c.name}-${c.model}`,
-      name: c.name,
-      categoryName: categories.find(cat => cat.defaultType === c.type)?.name || 'Equipamento Ativo',
-      deviceType: c.type,
-      type: c.type,
-      category: c.category,
-      vendor: c.vendor,
-      model: c.model,
-      rackUnits: c.rackUnits || 1,
-      powerSupply: c.powerSupply || 'AC 110/220V Bivolt',
-      powerConsumptionWatts: 45,
-      osType: c.osType || 'generic',
-      defaultPorts: c.defaultPorts,
-      notes: c.description,
-      createdAt: '',
-      isCustomTemplate: false,
-    }))
-  ];
+  // Only user's saved models (NO hardcoded pre-configured items)
+  const allAvailableTemplates = savedTemplates.map(t => ({
+    ...t,
+    type: t.deviceType,
+  }));
 
   const filteredTemplates = allAvailableTemplates.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
@@ -1275,80 +1252,94 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                 </div>
               </div>
 
-              {/* Grid of Templates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {filteredTemplates.map((tpl, idx) => {
-                  const isUserSaved = 'isCustomTemplate' in tpl && tpl.isCustomTemplate;
-                  return (
-                    <div
-                      key={idx}
-                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group relative ${
-                        isUserSaved
-                          ? 'bg-orange-50/30 border-orange-300 hover:border-orange-500 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-orange-400 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                            {tpl.vendor}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            {isUserSaved && (
+              {/* Grid of Templates or Empty State */}
+              {filteredTemplates.length === 0 ? (
+                <div className="p-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-3 my-4">
+                  <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-xs">
+                    <Bookmark className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-black text-slate-800">
+                    Nenhum Modelo Pré-Cadastrado na Biblioteca
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Ao cadastrar ativos técnicos na aba <strong>"Criar Ativo do Zero"</strong>, marque a opção de salvar o modelo. Ele ficará guardado aqui para você duplicar e instanciar com 1 clique sempre que precisar.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('create_scratch')}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Criar Meu Primeiro Ativo do Zero
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {filteredTemplates.map((tpl, idx) => {
+                    const isUserSaved = 'isCustomTemplate' in tpl && tpl.isCustomTemplate;
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group relative bg-orange-50/30 border-orange-300 hover:border-orange-500 shadow-sm"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                              {tpl.vendor}
+                            </span>
+                            <div className="flex items-center gap-1.5">
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-900 border border-orange-200">
                                 ⭐ Salvo por Você
                               </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {tpl.rackUnits || 1}U
+                              </span>
+                            </div>
+                          </div>
+
+                          <h4 className="text-sm font-black text-slate-900 group-hover:text-orange-600 transition-colors">
+                            {tpl.name}
+                          </h4>
+                          <p className="text-xs font-mono font-bold text-slate-500">
+                            {tpl.model}
+                          </p>
+                          <p className="text-xs text-slate-600 line-clamp-2">
+                            {(tpl as any).notes || (tpl as any).description || 'Ativo de alta performance para operação telecom.'}
+                          </p>
+
+                          {/* Ports Badges */}
+                          <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1">
+                            {(tpl.defaultPorts || []).slice(0, 4).map((p, pIdx) => (
+                              <span key={pIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono">
+                                {p.name} ({p.speedMode || p.type})
+                              </span>
+                            ))}
+                            {(tpl.defaultPorts || []).length > 4 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold">
+                                +{(tpl.defaultPorts || []).length - 4} portas
+                              </span>
                             )}
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {tpl.rackUnits || 1}U
-                            </span>
                           </div>
                         </div>
 
-                        <h4 className="text-sm font-black text-slate-900 group-hover:text-orange-600 transition-colors">
-                          {tpl.name}
-                        </h4>
-                        <p className="text-xs font-mono font-bold text-slate-500">
-                          {tpl.model}
-                        </p>
-                        <p className="text-xs text-slate-600 line-clamp-2">
-                          {(tpl as any).notes || (tpl as any).description || 'Ativo de alta performance para operação telecom.'}
-                        </p>
-
-                        {/* Ports Badges */}
-                        <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1">
-                          {(tpl.defaultPorts || []).slice(0, 4).map((p, pIdx) => (
-                            <span key={pIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono">
-                              {p.name} ({p.speedMode || p.type})
-                            </span>
-                          ))}
-                          {(tpl.defaultPorts || []).length > 4 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold">
-                              +{(tpl.defaultPorts || []).length - 4} portas
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleInstantiateFromTemplate(tpl)}
-                          className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          Copiar & Usar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleLoadTemplateIntoForm(tpl)}
-                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                          title="Carregar no Formulário para Editar"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        {isUserSaved && (
+                        {/* Action Buttons */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleInstantiateFromTemplate(tpl)}
+                            className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            Copiar & Usar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLoadTemplateIntoForm(tpl)}
+                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                            title="Carregar no Formulário para Editar"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomTemplate(tpl.id, e)}
@@ -1357,12 +1348,12 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
