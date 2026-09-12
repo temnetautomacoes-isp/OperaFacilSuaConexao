@@ -134,17 +134,28 @@ export const ColaboradorView: React.FC = () => {
   }, [currentUser]);
 
   // Today's Time Record
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const todayRecord = useMemo(() => {
     if (!currentUser) return undefined;
-    return timeRecords.find((r) => r.userId === currentUser.id && r.date === todayStr);
+    return timeRecords.find((r) => {
+      const matchId = r.userId === currentUser.id;
+      const matchName = r.userName && currentUser.name && r.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      return (matchId || matchName) && r.date === todayStr;
+    });
   }, [timeRecords, currentUser, todayStr]);
 
   // User's own documents
   const myDocuments = useMemo(() => {
     if (!currentUser) return [];
     return employeeDocuments
-      .filter((d) => d.userId === currentUser.id)
+      .filter((d) => d.userId === currentUser.id || (d.userName && currentUser.name && d.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase()))
       .sort((a, b) => b.uploadDate.localeCompare(a.uploadDate));
   }, [employeeDocuments, currentUser]);
 
@@ -245,7 +256,11 @@ export const ColaboradorView: React.FC = () => {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateObj = new Date(selectedYear, selectedMonth, d);
       const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const rec = timeRecords.find((r) => r.userId === currentUser.id && r.date === dateStr);
+      const rec = timeRecords.find((r) => {
+        const matchId = r.userId === currentUser.id;
+        const matchName = r.userName && currentUser.name && r.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+        return (matchId || matchName) && r.date === dateStr;
+      });
       
       result.push({
         dateStr,

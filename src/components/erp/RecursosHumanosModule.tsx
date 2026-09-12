@@ -328,18 +328,55 @@ export const RecursosHumanosModule: React.FC = () => {
     });
   }, [users, searchTerm, selectedDepartment]);
 
+  // Helper to match records to selected user resiliently (ID, username, code, or name)
+  const isRecordForUser = (r: TimeClockRecord, targetUserId: string): boolean => {
+    if (!targetUserId || targetUserId === 'todos') return true;
+    if (r.userId === targetUserId) return true;
+    const targetUser = users.find((u) => u.id === targetUserId);
+    if (!targetUser) return false;
+    if (r.userId === targetUser.username) return true;
+    if (targetUser.registrationCode && r.userId === targetUser.registrationCode) return true;
+    if (r.userName && targetUser.name && r.userName.trim().toLowerCase() === targetUser.name.trim().toLowerCase()) return true;
+    return false;
+  };
+
+  // Helper to match records to selected month/year without timezone shift issues
+  const isRecordInMonthYear = (r: TimeClockRecord, targetMonth: number, targetYear: number): boolean => {
+    if (!r.date) return false;
+    const parts = r.date.split('-');
+    if (parts.length >= 2) {
+      const y = Number(parts[0]);
+      const m = Number(parts[1]) - 1; // 0-indexed (0=Jan, 8=Set, 9=Out)
+      if (!isNaN(y) && !isNaN(m)) {
+        return y === targetYear && m === targetMonth;
+      }
+    }
+    const d = new Date(r.date + 'T00:00:00');
+    return !isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+  };
+
+  // Helper to match documents to selected user resiliently
+  const isDocForUser = (d: EmployeeDocument, targetUserId: string): boolean => {
+    if (!targetUserId || targetUserId === 'todos') return true;
+    if (d.userId === targetUserId) return true;
+    const targetUser = users.find((u) => u.id === targetUserId);
+    if (!targetUser) return false;
+    if (d.userId === targetUser.username) return true;
+    if (targetUser.registrationCode && d.userId === targetUser.registrationCode) return true;
+    if (d.userName && targetUser.name && d.userName.trim().toLowerCase() === targetUser.name.trim().toLowerCase()) return true;
+    return false;
+  };
+
   // Filtered Active Time Records
   const filteredActiveTimeRecords = useMemo(() => {
     return timeRecords.filter((r) => {
       if (r.isDeleted) return false;
-      const rDate = new Date(r.date + 'T00:00:00');
-      const matchUser = pontoUserId === 'todos' || r.userId === pontoUserId;
-      const matchMonth = rDate.getMonth() === pontoMonth;
-      const matchYear = rDate.getFullYear() === pontoYear;
+      const matchUser = isRecordForUser(r, pontoUserId);
+      const matchMonth = isRecordInMonthYear(r, pontoMonth, pontoYear);
       const matchStatus = pontoStatusFilter === 'todos' || r.status === pontoStatusFilter;
-      return matchUser && matchMonth && matchYear && matchStatus;
+      return matchUser && matchMonth && matchStatus;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [timeRecords, pontoUserId, pontoMonth, pontoYear, pontoStatusFilter]);
+  }, [timeRecords, pontoUserId, pontoMonth, pontoYear, pontoStatusFilter, users]);
 
   const filteredTimeRecords = filteredActiveTimeRecords;
 
@@ -347,13 +384,11 @@ export const RecursosHumanosModule: React.FC = () => {
   const filteredDeletedTimeRecords = useMemo(() => {
     return timeRecords.filter((r) => {
       if (!r.isDeleted) return false;
-      const rDate = new Date(r.date + 'T00:00:00');
-      const matchUser = pontoUserId === 'todos' || r.userId === pontoUserId;
-      const matchMonth = rDate.getMonth() === pontoMonth;
-      const matchYear = rDate.getFullYear() === pontoYear;
-      return matchUser && matchMonth && matchYear;
+      const matchUser = isRecordForUser(r, pontoUserId);
+      const matchMonth = isRecordInMonthYear(r, pontoMonth, pontoYear);
+      return matchUser && matchMonth;
     }).sort((a, b) => (b.deletedAt || b.date).localeCompare(a.deletedAt || a.date));
-  }, [timeRecords, pontoUserId, pontoMonth, pontoYear]);
+  }, [timeRecords, pontoUserId, pontoMonth, pontoYear, users]);
 
   const totalDeletedCount = useMemo(() => {
     return timeRecords.filter((r) => r.isDeleted).length;
@@ -380,12 +415,12 @@ export const RecursosHumanosModule: React.FC = () => {
   // Filtered Documents
   const filteredDocuments = useMemo(() => {
     return employeeDocuments.filter((d) => {
-      const matchUser = docUserId === 'todos' || d.userId === docUserId;
+      const matchUser = isDocForUser(d, docUserId);
       const matchCat = docCategory === 'todos' || d.category === docCategory;
       const matchSearch = searchTerm ? d.name.toLowerCase().includes(searchTerm.toLowerCase()) || (d.fileName && d.fileName.toLowerCase().includes(searchTerm.toLowerCase())) : true;
       return matchUser && matchCat && matchSearch;
     }).sort((a, b) => b.uploadDate.localeCompare(a.uploadDate));
-  }, [employeeDocuments, docUserId, docCategory, searchTerm]);
+  }, [employeeDocuments, docUserId, docCategory, searchTerm, users]);
 
   // Handle File Input for Document Upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -909,8 +944,8 @@ export const RecursosHumanosModule: React.FC = () => {
           {/* Collaborator Grid Cards (Clicking anywhere opens the Dossier) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredUsers.map((user) => {
-              const userDocs = employeeDocuments.filter((d) => d.userId === user.id);
-              const userRecords = timeRecords.filter((r) => r.userId === user.id);
+              const userDocs = employeeDocuments.filter((d) => isDocForUser(d, user.id));
+              const userRecords = timeRecords.filter((r) => isRecordForUser(r, user.id));
               const userAdjustmentsCount = userRecords.reduce((acc, r) => acc + (r.adjustments?.length || 0), 0);
               const hLevel = user.hierarchyLevel || (user.role === 'superadmin' ? 'diretoria' : user.role === 'admin' ? 'gestao' : 'operacional');
               const hConfig = HIERARCHY_CONFIG[hLevel] || HIERARCHY_CONFIG.operacional;
@@ -2418,7 +2453,7 @@ export const RecursosHumanosModule: React.FC = () => {
 
               {/* Sub-section: Histórico de Batidas de Ponto com Auditoria Individual */}
               {(() => {
-                const userPontoRecords = timeRecords.filter((r) => r.userId === selectedUserForDossier.id).sort((a, b) => b.date.localeCompare(a.date));
+                const userPontoRecords = timeRecords.filter((r) => isRecordForUser(r, selectedUserForDossier.id)).sort((a, b) => b.date.localeCompare(a.date));
                 const allUserAdjustments: Array<{ recordDate: string; log: TimeClockAdjustmentLog }> = [];
 
                 userPontoRecords.forEach((r) => {
@@ -2592,7 +2627,7 @@ export const RecursosHumanosModule: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <Folder className="w-4 h-4 text-purple-600" />
-                    Pasta Digital de Documentos ({employeeDocuments.filter((d) => d.userId === selectedUserForDossier.id).length})
+                    Pasta Digital de Documentos ({employeeDocuments.filter((d) => isDocForUser(d, selectedUserForDossier.id)).length})
                   </h3>
                   <button
                     type="button"
@@ -2616,12 +2651,12 @@ export const RecursosHumanosModule: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {employeeDocuments.filter((d) => d.userId === selectedUserForDossier.id).length === 0 ? (
+                  {employeeDocuments.filter((d) => isDocForUser(d, selectedUserForDossier.id)).length === 0 ? (
                     <div className="col-span-full p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
                       Nenhum documento anexado nesta pasta ainda.
                     </div>
                   ) : (
-                    employeeDocuments.filter((d) => d.userId === selectedUserForDossier.id).map((doc) => {
+                    employeeDocuments.filter((d) => isDocForUser(d, selectedUserForDossier.id)).map((doc) => {
                       const catCfg = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.outros;
                       return (
                         <div key={doc.id} className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs hover:border-purple-300 transition-colors flex items-center justify-between gap-3">
@@ -4184,8 +4219,7 @@ export const RecursosHumanosModule: React.FC = () => {
               {(() => {
                 const targetEmp = users.find((u) => u.id === printUserId) || users[0];
                 const empRecords = timeRecords.filter((r) => {
-                  const d = new Date(r.date + 'T00:00:00');
-                  return r.userId === targetEmp?.id && d.getMonth() === pontoMonth && d.getFullYear() === pontoYear;
+                  return isRecordForUser(r, targetEmp?.id || '') && isRecordInMonthYear(r, pontoMonth, pontoYear);
                 });
 
                 let totalH = 0;

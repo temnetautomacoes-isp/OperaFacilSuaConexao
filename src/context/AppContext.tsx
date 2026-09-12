@@ -1602,11 +1602,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Ponto Eletrônico & Gestão do Colaborador Handlers
+  const getLocalDateString = (d = new Date()): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const getTimeRecordForToday = (userId?: string): TimeClockRecord | undefined => {
     const targetUserId = userId || currentUser?.id;
     if (!targetUserId) return undefined;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return timeRecords.find((r) => r.userId === targetUserId && r.date === todayStr);
+    const todayStr = getLocalDateString(new Date());
+    return timeRecords.find((r) => {
+      const matchId = r.userId === targetUserId;
+      const matchName = currentUser && r.userName && currentUser.name && r.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      return (matchId || matchName) && r.date === todayStr;
+    });
   };
 
   const calculateHours = (entry1?: string, exit1?: string, entry2?: string, exit2?: string) => {
@@ -1638,11 +1649,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = getLocalDateString(now);
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     let updatedRecord: TimeClockRecord;
-    const existing = timeRecords.find((r) => r.userId === currentUser.id && r.date === todayStr);
+    const existing = timeRecords.find((r) => {
+      const matchId = r.userId === currentUser.id;
+      const matchName = r.userName && currentUser.name && r.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      return (matchId || matchName) && r.date === todayStr;
+    });
 
     const typeLabels: Record<TimeClockPunchType, string> = {
       entry1: 'Entrada (Início do Expediente)',
@@ -1721,7 +1736,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     selfieUrl: string;
     geoData?: TimeClockGeolocation;
   }) => {
-    const existing = timeRecords.find((r) => r.userId === data.userId && r.date === data.date);
+    const existing = timeRecords.find((r) => {
+      const matchId = r.userId === data.userId;
+      const matchName = r.userName && data.userName && r.userName.trim().toLowerCase() === data.userName.trim().toLowerCase();
+      return (matchId || matchName) && r.date === data.date;
+    });
     const justificationObj: TimeClockJustification = {
       id: `just-${Date.now()}`,
       date: data.date,
