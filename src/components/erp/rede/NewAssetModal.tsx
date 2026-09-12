@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Plus, 
@@ -9,7 +9,6 @@ import {
   PhoneCall, 
   BatteryCharging, 
   Cpu, 
-  Layers, 
   Radio, 
   Sliders, 
   Check, 
@@ -27,7 +26,13 @@ import {
   ShieldCheck,
   Monitor,
   Wifi,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Bookmark,
+  Copy,
+  Tag,
+  Search,
+  ExternalLink,
+  Edit3
 } from 'lucide-react';
 import { 
   NetworkNode, 
@@ -41,6 +46,51 @@ import {
   PortPoe
 } from '../../../types/network';
 import { DEVICE_CATALOG } from './initialNetworkData';
+
+export interface ActiveCategory {
+  id: string;
+  name: string;
+  badge: string;
+  defaultType: DeviceType;
+  defaultCategory: DeviceCategory;
+  defaultVendor: string;
+  defaultOs: NetworkNode['osType'];
+  description: string;
+}
+
+const DEFAULT_ACTIVE_CATEGORIES: ActiveCategory[] = [
+  { id: 'concentrador', name: 'Concentrador (PPPoE / CGNAT / BRAS)', badge: 'Core / BRAS', defaultType: 'router_cgnat', defaultCategory: 'isp_core', defaultVendor: 'MikroTik', defaultOs: 'mikrotik_routeros', description: 'Autenticação de clientes, sessões PPPoE/IPoE e CGNAT' },
+  { id: 'roteador_borda', name: 'Roteador de Borda (BGP Core)', badge: 'Trânsito IP / PTT', defaultType: 'router_bgp', defaultCategory: 'isp_core', defaultVendor: 'MikroTik', defaultOs: 'mikrotik_routeros', description: 'BGP Full-Routing, trânsito IP, IX.br / PTT e roteamento dinâmico' },
+  { id: 'roteador_residencial', name: 'Roteador Residencial / Wi-Fi', badge: 'CPE / Wi-Fi', defaultType: 'onu_ont', defaultCategory: 'access_ftth', defaultVendor: 'Huawei', defaultOs: 'generic', description: 'Roteador doméstico Wi-Fi 6, Mesh, AP e CPE de cliente' },
+  { id: 'switch_gerenciavel', name: 'Switch Gerenciável (L2+ / L3)', badge: 'VLANs / SFP+', defaultType: 'switch_core', defaultCategory: 'isp_core', defaultVendor: 'Huawei', defaultOs: 'huawei_vrp', description: 'Switch com VLANs, agregação LACP, STP e portas SFP+/10G' },
+  { id: 'switch_sem_gerencia', name: 'Switch Sem Gerência (Unmanaged)', badge: 'Plug & Play', defaultType: 'switch_access', defaultCategory: 'isp_core', defaultVendor: 'TP-Link', defaultOs: 'generic', description: 'Switch de acesso básico não configurável' },
+  { id: 'olt', name: 'OLT (GPON / EPON / XGS-PON)', badge: 'FTTH Central', defaultType: 'olt_gpon', defaultCategory: 'access_ftth', defaultVendor: 'Huawei', defaultOs: 'huawei_vrp', description: 'Concentrador óptico FTTH com portas PON para atendimento de ONUs' },
+  { id: 'onu', name: 'ONU (Optical Network Unit)', badge: 'Terminal Óptico', defaultType: 'onu_ont', defaultCategory: 'access_ftth', defaultVendor: 'Fiberhome', defaultOs: 'generic', description: 'Unidade de rede óptica em modo Bridge ou Router simples' },
+  { id: 'ont', name: 'ONT (Optical Network Terminal)', badge: 'Wi-Fi / VoIP', defaultType: 'onu_ont', defaultCategory: 'access_ftth', defaultVendor: 'Huawei', defaultOs: 'generic', description: 'Terminal de rede óptica com roteamento Wi-Fi e portas de voz FXS' },
+  { id: 'servidor', name: 'Servidor / Cache / DNS', badge: 'Data Center', defaultType: 'server_datacenter', defaultCategory: 'isp_core', defaultVendor: 'Dell', defaultOs: 'linux', description: 'Servidor Linux/Windows para Speedtest, DNS, Virtualização e ERP' },
+  { id: 'pabx_ip', name: 'Central Telefônica / PABX IP', badge: 'VoIP / SIP', defaultType: 'telephony_pabx', defaultCategory: 'telephony_voip', defaultVendor: 'Intelbras', defaultOs: 'linux', description: 'Central IP PBX, gateways FXS/FXO e troncos SIP E1' },
+  { id: 'nobreak_retificadora', name: 'Nobreak Online / Retificadora -48V', badge: 'Energia / Backup', defaultType: 'ups_nobreak', defaultCategory: 'rack_power', defaultVendor: 'APC by Schneider', defaultOs: 'generic', description: 'Alimentação ininterrupta UPS, fontes redundantes e baterias' },
+  { id: 'radio_enlace', name: 'Rádio Enlace PTP / PTMP', badge: 'Wireless Backhaul', defaultType: 'radio_ptp', defaultCategory: 'wireless', defaultVendor: 'Ubiquiti', defaultOs: 'generic', description: 'Transmissão sem fio de alta capacidade para torres e enlaces' },
+];
+
+export interface SavedAssetTemplate {
+  id: string;
+  name: string;
+  categoryName: string;
+  deviceType: DeviceType;
+  category: DeviceCategory;
+  vendor: string;
+  model: string;
+  rackUnits: number;
+  powerSupply: NetworkNode['powerSupply'];
+  powerConsumptionWatts: number;
+  osType: NetworkNode['osType'];
+  defaultPorts: NetworkPort[];
+  notes?: string;
+  customImageUrl?: string;
+  createdAt: string;
+  isCustomTemplate?: boolean;
+}
 
 interface NewAssetModalProps {
   isOpen: boolean;
@@ -70,38 +120,146 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
 
   const initialRackNode = initialParentRackId ? allNodes.find(n => n.id === initialParentRackId) : null;
 
-  const [activeTab, setActiveTab] = useState<'catalog' | 'custom'>('custom');
-  const [catalogSearch, setCatalogSearch] = useState('');
-  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('all');
-  const [catalogClassification, setCatalogClassification] = useState<'all' | 'ativo' | 'passivo'>('all');
+  // Active Categories state (loaded from localStorage)
+  const [categories, setCategories] = useState<ActiveCategory[]>(() => {
+    try {
+      const saved = localStorage.getItem('operafacil_active_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_ACTIVE_CATEGORIES;
+  });
 
-  // Subdivisão Ativos vs Passivos (Custom Form)
-  const [customClassification, setCustomClassification] = useState<'all' | 'ativo' | 'passivo'>('all');
+  // Saved templates state (loaded from localStorage)
+  const [savedTemplates, setSavedTemplates] = useState<SavedAssetTemplate[]>(() => {
+    try {
+      const saved = localStorage.getItem('operafacil_saved_asset_templates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
-  // Custom Asset Form States
+  const [activeTab, setActiveTab] = useState<'create_scratch' | 'templates'>('create_scratch');
+
+  // New Category Modal / Inline Prompt
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatBadge, setNewCatBadge] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+
+  // Form Fields for the Active Asset being created from scratch
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('concentrador');
   const [name, setName] = useState('');
   const [hostname, setHostname] = useState('');
-  const [deviceType, setDeviceType] = useState<DeviceType>('switch_core');
-  const [category, setCategory] = useState<DeviceCategory>('isp_core');
   const [vendor, setVendor] = useState('MikroTik');
   const [model, setModel] = useState('');
-  const [folderId, setFolderId] = useState<string>(initialRackNode?.folderId || defaultFolderId || folders[0]?.id || '');
-  const [location, setLocation] = useState(initialRackNode ? `${initialRackNode.name} (${initialRackPosition || 'U42'})` : 'POP Central - Rack 01');
-  const [parentRackId, setParentRackId] = useState<string>(initialParentRackId || '');
-  const [powerSourceNodeId, setPowerSourceNodeId] = useState<string>('');
-  const [rackUnits, setRackUnits] = useState<number>(1);
-  const [rackPosition, setRackPosition] = useState(initialRackPosition || 'U42');
-  const [totalRackCapacityU, setTotalRackCapacityU] = useState<number>(44);
-  const [capacityVa, setCapacityVa] = useState<number>(3000);
-  const [totalOutlets, setTotalOutlets] = useState<number>(8);
   const [serialNumber, setSerialNumber] = useState('');
-  const [managementIp, setManagementIp] = useState('');
   const [mac, setMac] = useState('');
-  const [powerSupply, setPowerSupply] = useState<NetworkNode['powerSupply']>('AC 110/220V Bivolt');
-  const [powerConsumptionWatts, setPowerConsumptionWatts] = useState<number>(45);
+  
+  // Installation & Location
+  const [folderId, setFolderId] = useState<string>(initialRackNode?.folderId || defaultFolderId || folders[0]?.id || '');
+  const [parentRackId, setParentRackId] = useState<string>(initialParentRackId || '');
+  const [rackPosition, setRackPosition] = useState<string>(initialRackPosition || 'U42');
+  const [rackUnits, setRackUnits] = useState<number>(1);
+  const [location, setLocation] = useState(initialRackNode ? `${initialRackNode.name} (${initialRackPosition || 'U42'})` : 'POP Central');
+  const [powerSourceNodeId, setPowerSourceNodeId] = useState<string>('');
+
+  // Network & Management Specs
   const [osType, setOsType] = useState<NetworkNode['osType']>('mikrotik_routeros');
+  const [managementIp, setManagementIp] = useState('');
+  const [netmaskCidr, setNetmaskCidr] = useState('/24');
+  const [gatewayIp, setGatewayIp] = useState('');
+  const [accessProtocols, setAccessProtocols] = useState('SSH, Winbox, HTTPS');
+
+  // Electrical & Hardware Specs
+  const [powerSupply, setPowerSupply] = useState<NetworkNode['powerSupply']>('Redundante AC/DC');
+  const [powerConsumptionWatts, setPowerConsumptionWatts] = useState<number>(45);
+  const [hardwareCpuRam, setHardwareCpuRam] = useState('');
+  const [throughputCapacity, setThroughputCapacity] = useState('');
   const [notes, setNotes] = useState('');
   const [customImageUrl, setCustomImageUrl] = useState<string>('');
+  const [saveAsTemplate, setSaveAsTemplate] = useState<boolean>(true);
+
+  // Ports State
+  const [ports, setPorts] = useState<NetworkPort[]>([
+    { id: 'p-1', name: 'ether1 (Gerência)', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', duplex: 'full', status: 'up' },
+    { id: 'p-2', name: 'ether2 (LAN)', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', duplex: 'full', status: 'up' },
+    { id: 'p-3', name: 'sfp-sfpplus1 (10G Uplink)', type: 'sfp_10g', mediaType: 'fiber', speedMode: '10000M', duplex: 'full', status: 'up' },
+    { id: 'p-4', name: 'sfp-sfpplus2 (10G Downlink)', type: 'sfp_10g', mediaType: 'fiber', speedMode: '10000M', duplex: 'full', status: 'up' },
+  ]);
+
+  // Batch Port Adder State
+  const [batchCount, setBatchCount] = useState<number>(8);
+  const [batchPrefix, setBatchPrefix] = useState('ether');
+  const [batchMediaType, setBatchMediaType] = useState<PortMediaType>('ethernet');
+  const [batchSpeedMode, setBatchSpeedMode] = useState<PortSpeedMode>('1000M');
+
+  // Catalog / Template Library Filter
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [templateCatFilter, setTemplateCatFilter] = useState('all');
+
+  const selectedCategoryObj = categories.find(c => c.id === selectedCategoryId) || categories[0];
+
+  // Auto-fill defaults when category changes
+  const handleSelectCategory = (catId: string) => {
+    setSelectedCategoryId(catId);
+    const cat = categories.find(c => c.id === catId);
+    if (cat) {
+      if (!vendor || vendor === 'MikroTik' || vendor === 'Huawei') {
+        setVendor(cat.defaultVendor);
+      }
+      setOsType(cat.defaultOs);
+
+      if (cat.id === 'olt') {
+        setBatchPrefix('gpon 0/1/');
+        setBatchMediaType('pon');
+        setBatchSpeedMode('2.5G');
+      } else if (cat.id === 'pabx_ip') {
+        setBatchPrefix('ramal-');
+        setBatchMediaType('voice');
+        setBatchSpeedMode('auto');
+      } else if (cat.id === 'concentrador' || cat.id === 'roteador_borda') {
+        setBatchPrefix('sfp-sfpplus');
+        setBatchMediaType('fiber');
+        setBatchSpeedMode('10000M');
+      } else {
+        setBatchPrefix('ether');
+        setBatchMediaType('ethernet');
+        setBatchSpeedMode('1000M');
+      }
+    }
+  };
+
+  const handleCreateNewCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    const id = `cat_${Date.now()}`;
+    const newCat: ActiveCategory = {
+      id,
+      name: newCatName.trim(),
+      badge: newCatBadge.trim() || 'Personalizado',
+      defaultType: 'switch_core',
+      defaultCategory: 'isp_core',
+      defaultVendor: 'Genérico',
+      defaultOs: 'generic',
+      description: newCatDesc.trim() || 'Categoria personalizada de equipamento ativo',
+    };
+
+    const updated = [...categories, newCat];
+    setCategories(updated);
+    localStorage.setItem('operafacil_active_categories', JSON.stringify(updated));
+    setSelectedCategoryId(id);
+    setIsAddingCategory(false);
+    setNewCatName('');
+    setNewCatBadge('');
+    setNewCatDesc('');
+  };
 
   const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,272 +278,27 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     }
   };
 
-  // Ports State
-  const [ports, setPorts] = useState<NetworkPort[]>([
-    { id: 'p-1', name: 'ether1', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', duplex: 'full', status: 'up' },
-    { id: 'p-2', name: 'ether2', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', duplex: 'full', status: 'up' },
-    { id: 'p-3', name: 'sfp-sfpplus1', type: 'sfp_10g', mediaType: 'fiber', speedMode: '10000M', duplex: 'full', status: 'up' },
-    { id: 'p-4', name: 'sfp-sfpplus2', type: 'sfp_10g', mediaType: 'fiber', speedMode: '10000M', duplex: 'full', status: 'up' },
-  ]);
-
-  // Batch Port Adder State
-  const [batchCount, setBatchCount] = useState<number>(8);
-  const [batchPrefix, setBatchPrefix] = useState('ether');
-  const [batchMediaType, setBatchMediaType] = useState<PortMediaType>('ethernet');
-  const [batchSpeedMode, setBatchSpeedMode] = useState<PortSpeedMode>('1000M');
-  const [batchDuplex, setBatchDuplex] = useState<PortDuplex>('full');
-  const [batchPoe, setBatchPoe] = useState<PortPoe>('none');
-  const [batchOpticalPower, setBatchOpticalPower] = useState<number>(4.5);
-
-  // 1. ATIVOS DE REDE (Equipamentos Energizados / Eletrônicos - Que ligam na tomada)
-  const activeDeviceOptions: Array<{ type: DeviceType; category: DeviceCategory; label: string; icon: any; defaultVendor: string; os: NetworkNode['osType']; isPassive?: boolean; badge: string; description: string }> = [
-    { type: 'router_bgp', category: 'isp_core', label: 'Roteador BGP Core / Borda', icon: Router, defaultVendor: 'MikroTik', os: 'mikrotik_routeros', isPassive: false, badge: 'Energizado (AC/DC)', description: 'Roteamento dinâmico, BGP e OSPF' },
-    { type: 'router_cgnat', category: 'isp_core', label: 'Concentrador PPPoE / CGNAT', icon: Router, defaultVendor: 'MikroTik', os: 'mikrotik_routeros', isPassive: false, badge: 'Energizado (AC/DC)', description: 'Autenticação de clientes e NAT' },
-    { type: 'switch_core', category: 'isp_core', label: 'Switch Core L3 / Agregação', icon: Network, defaultVendor: 'Huawei', os: 'huawei_vrp', isPassive: false, badge: 'Energizado (AC/DC)', description: 'Backbone e portas 10G/40G/100G' },
-    { type: 'switch_access', category: 'isp_core', label: 'Switch Acesso L2 / PoE', icon: Network, defaultVendor: 'Datacom', os: 'generic', isPassive: false, badge: 'Energizado (PoE/AC)', description: 'Distribuição e alimentação PoE' },
-    { type: 'olt_gpon', category: 'access_ftth', label: 'OLT GPON / EPON / XGS-PON', icon: Zap, defaultVendor: 'Huawei', os: 'huawei_vrp', isPassive: false, badge: 'Energizado (DC -48V/AC)', description: 'Concentrador óptico FTTH' },
-    { type: 'telephony_pabx', category: 'telephony_voip', label: 'Central Telefônica / PABX IP', icon: PhoneCall, defaultVendor: 'Intelbras', os: 'linux', isPassive: false, badge: 'Energizado (AC/VoIP)', description: 'Troncos SIP, E1, FXS e FXO' },
-    { type: 'server_datacenter', category: 'isp_core', label: 'Servidor / Cache / DNS', icon: Server, defaultVendor: 'Dell', os: 'linux', isPassive: false, badge: 'Energizado (AC Bivolt)', description: 'DNS, Speedtest e Virtualização' },
-    { type: 'radio_ptp', category: 'wireless', label: 'Rádio Enlace PTP Torre', icon: Radio, defaultVendor: 'Ubiquiti', os: 'generic', isPassive: false, badge: 'Energizado (PoE 24/48V)', description: 'Transmissão de alta capacidade sem fio' },
-    { type: 'ups_nobreak', category: 'rack_power', label: 'Nobreak Senoidal Online (UPS)', icon: BatteryCharging, defaultVendor: 'APC by Schneider', os: 'generic', isPassive: false, badge: 'Energizado (Baterias/UPS)', description: 'Autonomia ininterrupta' },
-    { type: 'rectifier_power', category: 'rack_power', label: 'Fonte Retificadora -48V DC', icon: BatteryCharging, defaultVendor: 'Delta', os: 'generic', isPassive: false, badge: 'Energizado (-48V Telecom)', description: 'Alimentação DC com gerência' },
-    { type: 'pdu_power_strip', category: 'rack_power', label: 'Régua PDU 8/12 Tomadas 1U', icon: Zap, defaultVendor: 'Max Eletron', os: 'generic', isPassive: false, badge: 'Energizado (Distribuição)', description: 'Tomadas C13/C19/NBR para rack' },
-    { type: 'electrical_outlet', category: 'rack_power', label: 'Tomada de Parede / Ponto 20A', icon: Zap, defaultVendor: 'Schneider', os: 'generic', isPassive: false, badge: 'Energizado (Rede AC)', description: 'Ponto elétrico 110V/220V' },
-    { type: 'firewall', category: 'enterprise', label: 'Firewall de Borda / UTM', icon: ShieldCheck, defaultVendor: 'Fortinet', os: 'generic', isPassive: false, badge: 'Energizado (AC Bivolt)', description: 'Segurança, VPN e regras de tráfego' },
-    { type: 'onu_ont', category: 'access_ftth', label: 'ONU / ONT Wi-Fi 6', icon: Wifi, defaultVendor: 'Huawei', os: 'generic', isPassive: false, badge: 'Energizado (12V DC)', description: 'Terminal óptico residencial' },
-    { type: 'pc_workstation', category: 'enterprise', label: 'PC / Estação de Trabalho', icon: Monitor, defaultVendor: 'Dell', os: 'generic', isPassive: false, badge: 'Energizado (AC Bivolt)', description: 'Computador para testes e monitoramento' },
-  ];
-
-  // 2. PASSIVOS DE REDE (Estrutura, Acomodação, Caixas & Guardar Coisas - Não energizados)
-  const passiveDeviceOptions: Array<{ type: DeviceType; category: DeviceCategory; label: string; icon: any; defaultVendor: string; os: NetworkNode['osType']; isPassive?: boolean; badge: string; description: string }> = [
-    { type: 'rack_floor', category: 'passive', label: 'Rack 19" de Chão (44U/24U)', icon: Box, defaultVendor: 'Totem', os: 'generic', isPassive: true, badge: 'Acomodação de Piso', description: 'Gabinete para abrigar e guardar ativos' },
-    { type: 'rack_wall', category: 'passive', label: 'Rack de Parede (6U/9U/12U)', icon: Box, defaultVendor: 'Intelbras', os: 'generic', isPassive: true, badge: 'Acomodação de Parede', description: 'Mini rack para acomodar switches e PDUs' },
-    { type: 'dio_fiber', category: 'passive', label: 'DIO Óptico 24/48 FO 1U', icon: Layers, defaultVendor: 'Fibracem', os: 'generic', isPassive: true, badge: 'Acomodação Óptica', description: 'Terminação e distribuição de fibras' },
-    { type: 'front_panel_blank', category: 'passive', label: 'Frente Falsa 1U/2U (Painel Cego)', icon: SlidersHorizontal, defaultVendor: 'Totem', os: 'generic', isPassive: true, badge: 'Fechamento / Acabamento', description: 'Ocupa e fecha espaços vazios no rack' },
-    { type: 'cable_organizer', category: 'passive', label: 'Guia de Cabos Horizontal 1U', icon: Cable, defaultVendor: 'Max Eletron', os: 'generic', isPassive: true, badge: 'Organização de Cabos', description: 'Organizador com tampa para cordões' },
-    { type: 'rack_tray', category: 'passive', label: 'Bandeja Fixa / Deslizante 1U', icon: Layers2, defaultVendor: 'Totem', os: 'generic', isPassive: true, badge: 'Apoio / Suporte', description: 'Suporte para modems, fontes e itens soltos' },
-    { type: 'patch_panel_rj45', category: 'passive', label: 'Patch Panel 24/48P Cat6 1U', icon: Layers, defaultVendor: 'Furukawa', os: 'generic', isPassive: true, badge: 'Cabeamento Metálico', description: 'Painel de manobras RJ45 Cat6/Cat6A' },
-    { type: 'cto', category: 'passive', label: 'CTO Atendimento FTTH (Poste)', icon: Layers, defaultVendor: 'Fibracem', os: 'generic', isPassive: true, badge: 'Caixa Externa (Poste)', description: 'Caixa para acomodar splitters e drops' },
-    { type: 'ceo', category: 'passive', label: 'Caixa de Emenda CEO (Fusão)', icon: Layers, defaultVendor: 'Overtek', os: 'generic', isPassive: true, badge: 'Caixa de Emenda (Domo)', description: 'Acomoda fusões subterrâneas/aéreas' },
-    { type: 'splitter', category: 'passive', label: 'Splitter Óptico PLC (1x8/1x16)', icon: Network, defaultVendor: 'Fibracem', os: 'generic', isPassive: true, badge: 'Divisor Óptico', description: 'Divisor óptico passivo para redes PON' },
-  ];
-
-  const deviceTypeOptions = [...activeDeviceOptions, ...passiveDeviceOptions];
-
-  const handleSelectDeviceType = (opt: typeof deviceTypeOptions[0]) => {
-    setDeviceType(opt.type);
-    setCategory(opt.category);
-    if (!vendor) setVendor(opt.defaultVendor);
-    if (opt.os) setOsType(opt.os);
-
-    // Auto setup default ports / configs
-    if (opt.type === 'telephony_pabx') {
-      setBatchPrefix('ramal-');
-      setBatchMediaType('voice');
-      setBatchSpeedMode('auto');
-    } else if (opt.type === 'olt_gpon') {
-      setBatchPrefix('gpon 0/1/');
-      setBatchMediaType('pon');
-      setBatchSpeedMode('2.5G');
-    } else if (opt.type === 'ups_nobreak' || opt.type === 'pdu_power_strip') {
-      setBatchPrefix('Tomada ');
-      setBatchMediaType('power_ac');
-      setBatchSpeedMode('auto');
-      const pduPorts: NetworkPort[] = [];
-      for (let i = 1; i <= 8; i++) {
-        pduPorts.push({
-          id: `p-pdu-${i}-${Date.now()}`,
-          name: `Tomada 0${i} (20A 220V)`,
-          type: 'power_outlet',
-          mediaType: 'power_ac',
-          status: 'up',
-        });
-      }
-      setPorts(pduPorts);
-    } else if (opt.type === 'patch_panel_rj45') {
-      setBatchPrefix('Porta ');
-      setBatchMediaType('ethernet');
-      setBatchSpeedMode('1000M');
-      const ppPorts: NetworkPort[] = [];
-      for (let i = 1; i <= 24; i++) {
-        ppPorts.push({
-          id: `p-pp-${i}-${Date.now()}`,
-          name: `Porta ${i < 10 ? '0' + i : i}`,
-          type: 'copper_1g',
-          mediaType: 'ethernet',
-          speedMode: '1000M',
-          status: 'up',
-        });
-      }
-      setPorts(ppPorts);
-    } else if (opt.type === 'dio_fiber') {
-      setBatchPrefix('Fibra ');
-      setBatchMediaType('fiber');
-      setBatchSpeedMode('auto');
-      const dioPorts: NetworkPort[] = [];
-      for (let i = 1; i <= 24; i++) {
-        dioPorts.push({
-          id: `p-dio-${i}-${Date.now()}`,
-          name: `Fibra ${i < 10 ? '0' + i : i} (SC/APC)`,
-          type: 'pon_gpon',
-          mediaType: 'fiber',
-          status: 'up',
-        });
-      }
-      setPorts(dioPorts);
-    } else if (opt.type === 'rack_floor') {
-      setRackUnits(44);
-      setTotalRackCapacityU(44);
-      setPorts([]);
-    } else if (opt.type === 'rack_wall') {
-      setRackUnits(9);
-      setTotalRackCapacityU(9);
-      setPorts([]);
-    } else if (opt.type === 'front_panel_blank' || opt.type === 'rack_tray' || opt.type === 'cable_organizer') {
-      setRackUnits(1);
-      setPorts([]);
-    }
-  };
-
   const handleAddPortBatch = () => {
     const newPorts: NetworkPort[] = [];
     const startIndex = ports.length + 1;
 
     for (let i = 0; i < batchCount; i++) {
       const portNum = startIndex + i;
-      let portName = '';
-      
-      if (batchMediaType === 'pon') {
-        portName = `${batchPrefix}${portNum}`;
-      } else if (batchMediaType === 'voice') {
-        portName = `${batchPrefix}${100 + portNum}`;
-      } else {
-        portName = `${batchPrefix}${portNum}`;
-      }
-
+      const portName = `${batchPrefix}${portNum}`;
       newPorts.push({
-        id: `p-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
+        id: `port-${Date.now()}-${i}`,
         name: portName,
-        type: batchMediaType === 'fiber' ? (batchSpeedMode === '10000M' ? 'sfp_10g' : 'sfp_1g') :
+        type: batchMediaType === 'fiber' ? (batchSpeedMode === '10000M' ? 'sfp_10g' : batchSpeedMode === '25G' ? 'sfp_25g' : 'sfp_1g') :
               batchMediaType === 'pon' ? 'pon_gpon' :
-              batchMediaType === 'voice' ? 'voice_fxs' :
-              batchSpeedMode === '10000M' ? 'copper_10g' :
-              batchSpeedMode === '100M' ? 'copper_100m' : 'copper_1g',
+              batchMediaType === 'voice' ? 'voice_fxs' : 'copper_1g',
         mediaType: batchMediaType,
         speedMode: batchSpeedMode,
-        duplex: batchDuplex,
-        poe: batchPoe,
-        opticalPowerDbm: batchMediaType === 'pon' ? batchOpticalPower : undefined,
+        duplex: 'full',
         status: 'up',
       });
     }
 
     setPorts([...ports, ...newPorts]);
-  };
-
-  const handleAddPreset = (presetName: string) => {
-    if (presetName === 'switch_24g_4sfp') {
-      const p: NetworkPort[] = [];
-      for (let i = 1; i <= 24; i++) {
-        p.push({
-          id: `p-ge-${i}-${Date.now()}`,
-          name: `GigabitEthernet0/0/${i}`,
-          type: 'copper_1g',
-          mediaType: 'ethernet',
-          speedMode: '1000M',
-          duplex: 'full',
-          status: 'up',
-        });
-      }
-      for (let i = 1; i <= 4; i++) {
-        p.push({
-          id: `p-xge-${i}-${Date.now()}`,
-          name: `XGigabitEthernet0/0/${i} (10G)`,
-          type: 'sfp_10g',
-          mediaType: 'fiber',
-          speedMode: '10000M',
-          duplex: 'full',
-          status: 'up',
-        });
-      }
-      setPorts([...ports, ...p]);
-    } else if (presetName === 'switch_48g_4sfp') {
-      const p: NetworkPort[] = [];
-      for (let i = 1; i <= 48; i++) {
-        p.push({
-          id: `p-ge-${i}-${Date.now()}`,
-          name: `GigabitEthernet0/0/${i}`,
-          type: 'copper_1g',
-          mediaType: 'ethernet',
-          speedMode: '1000M',
-          duplex: 'full',
-          status: 'up',
-        });
-      }
-      for (let i = 1; i <= 4; i++) {
-        p.push({
-          id: `p-xge-${i}-${Date.now()}`,
-          name: `XGigabitEthernet0/0/${i} (10G)`,
-          type: 'sfp_10g',
-          mediaType: 'fiber',
-          speedMode: '10000M',
-          duplex: 'full',
-          status: 'up',
-        });
-      }
-      setPorts([...ports, ...p]);
-    } else if (presetName === 'olt_8pon_4sfp') {
-      const p: NetworkPort[] = [];
-      for (let i = 1; i <= 8; i++) {
-        p.push({
-          id: `p-pon-${i}-${Date.now()}`,
-          name: `GPON 0/1/${i - 1} (Class C+)`,
-          type: 'pon_gpon',
-          mediaType: 'pon',
-          speedMode: '2.5G',
-          opticalPowerDbm: 4.8,
-          status: 'up',
-        });
-      }
-      for (let i = 1; i <= 4; i++) {
-        p.push({
-          id: `p-uplink-${i}-${Date.now()}`,
-          name: `10GE SFP+ Uplink ${i}`,
-          type: 'sfp_10g',
-          mediaType: 'fiber',
-          speedMode: '10000M',
-          status: 'up',
-        });
-      }
-      setPorts([...ports, ...p]);
-    } else if (presetName === 'pabx_8fxs_4fxo_e1') {
-      const p: NetworkPort[] = [
-        { id: `p-sip-1-${Date.now()}`, name: 'LAN (SIP Trunk 1G)', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', status: 'up' },
-        { id: `p-sip-2-${Date.now()}`, name: 'WAN (VoIP Provider)', type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', status: 'up' },
-        { id: `p-e1-${Date.now()}`, name: 'E1 Link (R2 / ISDN-PRI)', type: 'voice_e1', mediaType: 'voice', speedMode: 'auto', status: 'up' },
-      ];
-      for (let i = 1; i <= 4; i++) {
-        p.push({
-          id: `p-fxo-${i}-${Date.now()}`,
-          name: `Linha FXO ${i}`,
-          type: 'voice_fxo',
-          mediaType: 'voice',
-          speedMode: 'auto',
-          status: 'up',
-        });
-      }
-      for (let i = 1; i <= 8; i++) {
-        p.push({
-          id: `p-fxs-${i}-${Date.now()}`,
-          name: `Ramal FXS ${100 + i}`,
-          type: 'voice_fxs',
-          mediaType: 'voice',
-          speedMode: 'auto',
-          status: 'up',
-        });
-      }
-      setPorts([...ports, ...p]);
-    }
   };
 
   const handleRemovePort = (portId: string) => {
@@ -398,117 +311,189 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     setPorts(copy);
   };
 
-  const handleSaveCustomDevice = () => {
+  // Save the custom asset from scratch
+  const handleSaveActiveAsset = () => {
     if (!name.trim()) {
-      alert('Por favor, informe o nome do ativo.');
+      alert('Por favor, informe o Nome do Ativo de Rede.');
       return;
     }
 
-    const isPassiveType = deviceType.includes('rack') || deviceType.includes('patch') || deviceType.includes('dio') || deviceType.includes('cto') || deviceType.includes('ceo') || deviceType.includes('organizer');
+    const cat = selectedCategoryObj;
+    const resolvedType = cat.defaultType || 'switch_core';
+    const resolvedCategory = cat.defaultCategory || 'isp_core';
+
+    const fullLocation = parentRackId 
+      ? `${allNodes.find(n => n.id === parentRackId)?.name || 'Rack'} (${rackPosition})`
+      : (location || 'POP Central');
 
     const newNode: Partial<NetworkNode> = {
       name: name.trim(),
-      hostname: hostname.trim() || `${name.toLowerCase().replace(/\s+/g, '-')}.local`,
-      type: deviceType,
-      category,
+      hostname: hostname.trim() || `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.local`,
+      type: resolvedType,
+      category: resolvedCategory,
       vendor: vendor.trim() || 'Genérico',
       model: model.trim() || name.trim(),
       folderId: folderId || undefined,
-      location: parentRackId ? `${allNodes.find(n => n.id === parentRackId)?.name || 'Rack'} (${rackPosition})` : location,
+      location: fullLocation,
       parentRackId: parentRackId || undefined,
       powerSourceNodeId: powerSourceNodeId || undefined,
       rackUnits,
       rackPosition: rackPosition || 'U1',
-      totalRackCapacityU: deviceType.includes('rack') ? totalRackCapacityU : undefined,
-      capacityVa: deviceType === 'ups_nobreak' ? capacityVa : undefined,
-      totalOutlets: (deviceType === 'ups_nobreak' || deviceType === 'pdu_power_strip') ? totalOutlets : undefined,
-      serialNumber,
+      serialNumber: serialNumber.trim() || undefined,
       managementIp: managementIp.trim() || undefined,
       ip: managementIp.trim() || '192.168.1.1',
       mac: mac.trim() || undefined,
       powerSupply,
       powerConsumptionWatts,
       osType,
-      notes,
+      notes: [
+        notes.trim(),
+        netmaskCidr ? `Máscara: ${netmaskCidr}` : '',
+        gatewayIp ? `Gateway: ${gatewayIp}` : '',
+        accessProtocols ? `Acesso: ${accessProtocols}` : '',
+        hardwareCpuRam ? `Hardware: ${hardwareCpuRam}` : '',
+        throughputCapacity ? `Capacidade: ${throughputCapacity}` : '',
+      ].filter(Boolean).join('\n'),
       ports,
       status: 'online',
       isCustomAsset: true,
-      isPassive: isPassiveType,
+      isPassive: false, // Strict Active Device
       customImageUrl: customImageUrl.trim() || undefined,
       imageUrl: customImageUrl.trim() || undefined,
     };
 
+    // Save as reusable template if checked
+    if (saveAsTemplate) {
+      const templateItem: SavedAssetTemplate = {
+        id: `tpl-${Date.now()}`,
+        name: name.trim(),
+        categoryName: cat.name,
+        deviceType: resolvedType,
+        category: resolvedCategory,
+        vendor: vendor.trim() || 'Genérico',
+        model: model.trim() || name.trim(),
+        rackUnits,
+        powerSupply,
+        powerConsumptionWatts,
+        osType,
+        defaultPorts: JSON.parse(JSON.stringify(ports)),
+        notes: notes.trim(),
+        customImageUrl: customImageUrl.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        isCustomTemplate: true,
+      };
+
+      const updatedTpls = [templateItem, ...savedTemplates.filter(t => t.name !== templateItem.name)];
+      setSavedTemplates(updatedTpls);
+      localStorage.setItem('operafacil_saved_asset_templates', JSON.stringify(updatedTpls));
+    }
+
     onAddDevice(newNode);
     onClose();
   };
 
-  const handleSelectFromCatalog = (item: typeof DEVICE_CATALOG[0]) => {
-    const isPassiveType = item.category === 'passive' || item.category === 'cabling_structure' || item.type.includes('rack') || item.type.includes('patch') || item.type.includes('dio') || item.type.includes('cto') || item.type.includes('ceo') || item.type.includes('organizer') || item.type.includes('blank') || item.type.includes('tray') || item.type.includes('splitter');
+  // Copy / Instantiate from Template Library
+  const handleInstantiateFromTemplate = (tpl: SavedAssetTemplate | typeof DEVICE_CATALOG[0]) => {
+    const isCustom = 'isCustomTemplate' in tpl && tpl.isCustomTemplate;
+    const cat = categories.find(c => c.defaultType === tpl.type) || categories[0];
+
+    const fullLocation = parentRackId 
+      ? `${allNodes.find(n => n.id === parentRackId)?.name || 'Rack'} (${rackPosition})`
+      : (location || 'POP Central');
 
     const newNode: Partial<NetworkNode> = {
-      name: item.name,
-      hostname: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.local`,
-      type: item.type,
-      category: item.category,
-      vendor: item.vendor,
-      model: item.model,
+      name: tpl.name,
+      hostname: `${tpl.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.local`,
+      type: tpl.type as DeviceType,
+      category: tpl.category as DeviceCategory,
+      vendor: tpl.vendor,
+      model: tpl.model,
       folderId: folderId || defaultFolderId || folders[0]?.id || undefined,
-      location: parentRackId ? `${allNodes.find(n => n.id === parentRackId)?.name || 'Rack'} (${rackPosition || 'U42'})` : location,
+      location: fullLocation,
       parentRackId: parentRackId || undefined,
       powerSourceNodeId: powerSourceNodeId || undefined,
-      rackUnits: item.rackUnits || 1,
+      rackUnits: tpl.rackUnits || 1,
       rackPosition: rackPosition || 'U42',
-      totalRackCapacityU: (item as any).totalRackCapacityU,
-      capacityVa: (item as any).capacityVa,
-      totalOutlets: (item as any).totalOutlets,
-      powerSupply: item.powerSupply || 'AC 110/220V Bivolt',
-      osType: item.osType || 'generic',
-      ports: JSON.parse(JSON.stringify(item.defaultPorts)),
+      powerSupply: tpl.powerSupply || 'Redundante AC/DC',
+      powerConsumptionWatts: (tpl as any).powerConsumptionWatts || 45,
+      osType: tpl.osType || 'generic',
+      ports: JSON.parse(JSON.stringify(tpl.defaultPorts || [])),
       status: 'online',
-      notes: item.description,
-      isPassive: isPassiveType,
+      notes: (tpl as any).description || (tpl as any).notes || '',
+      isCustomAsset: true,
+      isPassive: false,
+      customImageUrl: (tpl as any).customImageUrl,
+      imageUrl: (tpl as any).customImageUrl,
     };
 
     onAddDevice(newNode);
     onClose();
   };
 
-  const filteredCatalog = DEVICE_CATALOG.filter(c => {
-    const isPassive = c.category === 'passive' || c.category === 'cabling_structure' || c.type.includes('rack') || c.type.includes('dio') || c.type.includes('cto') || c.type.includes('ceo') || c.type.includes('organizer') || c.type.includes('blank') || c.type.includes('tray') || c.type.includes('splitter');
-    if (catalogClassification === 'ativo' && isPassive) return false;
-    if (catalogClassification === 'passivo' && !isPassive) return false;
-    const matchesCat = selectedCatalogCategory === 'all' || c.category === selectedCatalogCategory;
-    const matchesSearch = c.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-                          c.model.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-                          c.vendor.toLowerCase().includes(catalogSearch.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  // Load template into scratch form for editing
+  const handleLoadTemplateIntoForm = (tpl: SavedAssetTemplate | typeof DEVICE_CATALOG[0]) => {
+    setName(tpl.name);
+    setModel(tpl.model);
+    setVendor(tpl.vendor);
+    setRackUnits(tpl.rackUnits || 1);
+    if (tpl.powerSupply) setPowerSupply(tpl.powerSupply);
+    if (tpl.osType) setOsType(tpl.osType);
+    if (tpl.defaultPorts) setPorts(JSON.parse(JSON.stringify(tpl.defaultPorts)));
+    if ((tpl as any).notes || (tpl as any).description) setNotes((tpl as any).notes || (tpl as any).description);
+    if ((tpl as any).customImageUrl) setCustomImageUrl((tpl as any).customImageUrl);
 
-  const getSpeedBadge = (speed?: PortSpeedMode) => {
-    switch (speed) {
-      case '10M':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-yellow-100 text-yellow-800 text-[9px] font-bold">10M</span>;
-      case '100M':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-lime-100 text-lime-800 text-[9px] font-bold">100M</span>;
-      case '1000M':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-emerald-100 text-emerald-800 text-[9px] font-bold">1000M (1G)</span>;
-      case '2.5G':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-teal-100 text-teal-800 text-[9px] font-bold">2.5G PON</span>;
-      case '10000M':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-cyan-100 text-cyan-800 text-[9px] font-bold">10000M (10G)</span>;
-      case '25G':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-purple-100 text-purple-800 text-[9px] font-bold">25G</span>;
-      case '40G':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-indigo-100 text-indigo-800 text-[9px] font-bold">40G</span>;
-      case '100G':
-        return <span className="px-1.5 py-0.5 rounded-sm bg-pink-100 text-pink-800 text-[9px] font-bold">100G</span>;
-      default:
-        return <span className="px-1.5 py-0.5 rounded-sm bg-slate-100 text-slate-700 text-[9px] font-bold">Auto</span>;
-    }
+    const matchingCat = categories.find(c => c.defaultType === tpl.type);
+    if (matchingCat) setSelectedCategoryId(matchingCat.id);
+
+    setActiveTab('create_scratch');
   };
 
+  const handleDeleteCustomTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedTemplates.filter(t => t.id !== templateId);
+    setSavedTemplates(updated);
+    localStorage.setItem('operafacil_saved_asset_templates', JSON.stringify(updated));
+  };
+
+  // Active Catalog Items only (filtering out any passive items)
+  const activeCatalogList = DEVICE_CATALOG.filter(c => {
+    const isPassive = c.category === 'passive' || c.category === 'cabling_structure' || c.type.includes('rack') || c.type.includes('dio') || c.type.includes('cto') || c.type.includes('ceo') || c.type.includes('organizer') || c.type.includes('blank') || c.type.includes('tray') || c.type.includes('splitter');
+    return !isPassive;
+  });
+
+  // Filtered Templates + Active Catalog
+  const allAvailableTemplates = [
+    ...savedTemplates.map(t => ({ ...t, type: t.deviceType })),
+    ...activeCatalogList.map(c => ({
+      id: `cat-${c.name}-${c.model}`,
+      name: c.name,
+      categoryName: categories.find(cat => cat.defaultType === c.type)?.name || 'Equipamento Ativo',
+      deviceType: c.type,
+      type: c.type,
+      category: c.category,
+      vendor: c.vendor,
+      model: c.model,
+      rackUnits: c.rackUnits || 1,
+      powerSupply: c.powerSupply || 'AC 110/220V Bivolt',
+      powerConsumptionWatts: 45,
+      osType: c.osType || 'generic',
+      defaultPorts: c.defaultPorts,
+      notes: c.description,
+      createdAt: '',
+      isCustomTemplate: false,
+    }))
+  ];
+
+  const filteredTemplates = allAvailableTemplates.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                          t.model.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                          t.vendor.toLowerCase().includes(templateSearch.toLowerCase());
+    const matchesCat = templateCatFilter === 'all' || t.categoryName?.toLowerCase().includes(templateCatFilter.toLowerCase()) || t.deviceType === templateCatFilter;
+    return matchesSearch && matchesCat;
+  });
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150 select-none">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
@@ -517,14 +502,16 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                Ativos de Rede & Equipamentos de Rack
-                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold border border-orange-200">
-                  Telecom NOC
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-slate-900">
+                  Cadastro Técnico de Ativo de Rede
+                </h2>
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-black border border-orange-200">
+                  Telecom NOC • 100% Ativos
                 </span>
-              </h2>
+              </div>
               <p className="text-xs text-slate-500 font-medium">
-                Cadastre ou selecione roteadores BGP, switches, OLTs, centrais telefônicas PABX e servidores com especificação detalhada de portas e velocidades.
+                Crie um novo ativo técnico do zero especificando todas as portas, potência, IP e chassi, ou copie um modelo da biblioteca.
               </p>
             </div>
           </div>
@@ -538,36 +525,36 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="px-6 py-2.5 bg-slate-100/80 border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
+        {/* Tab Switcher & Quick Context Bar */}
+        <div className="px-6 py-2.5 bg-slate-100/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setActiveTab('custom')}
+              onClick={() => setActiveTab('create_scratch')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
-                activeTab === 'custom'
+                activeTab === 'create_scratch'
                   ? 'bg-orange-600 text-white shadow-md ring-2 ring-orange-400/50'
                   : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
               }`}
             >
               <Plus className="w-4 h-4" />
-              Criar Novo Ativo Personalizado (Customizado)
+              Criar Ativo do Zero (Especificação Completa)
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('catalog')}
+              onClick={() => setActiveTab('templates')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
-                activeTab === 'catalog'
+                activeTab === 'templates'
                   ? 'bg-orange-600 text-white shadow-md ring-2 ring-orange-400/50'
                   : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
               }`}
             >
-              <Layers2 className="w-4 h-4" />
-              Biblioteca de Modelos Pré-Cadastrados ({DEVICE_CATALOG.length})
+              <Bookmark className="w-4 h-4 text-orange-500" />
+              Biblioteca de Modelos Pré-Cadastrados ({allAvailableTemplates.length})
             </button>
           </div>
 
-          {/* Folder Target Selector */}
+          {/* Destination Folder Selector */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500">Destino:</span>
             <select
@@ -585,853 +572,797 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {activeTab === 'custom' ? (
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 font-sans">
+          {activeTab === 'create_scratch' ? (
             <div className="space-y-6">
-              {/* 1. Tipo do Ativo / Passivo com Subdivisão Clara */}
-              <div className="space-y-4">
+              {/* 1. CLASSIFICAÇÃO DO ATIVO (Com Botão de Nova Categoria) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/70 to-amber-50/70 border border-orange-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800">
-                      1. Selecione a Categoria do Equipamento (Ativo vs Passivo)
+                    <label className="block text-xs font-black uppercase tracking-wider text-orange-950">
+                      1. Classificação do Ativo de Rede
                     </label>
-                    <p className="text-[11px] text-slate-500">
-                      <strong>Ativos:</strong> Equipamentos que ligam na energia. <strong>Passivos:</strong> Racks, caixas, DIOs e itens de acomodação.
+                    <p className="text-[11px] text-slate-600">
+                      Selecione o tipo de função do ativo na sua rede ou adicione uma nova categoria personalizada.
                     </p>
                   </div>
 
-                  {/* Subdivisão Segment Switcher */}
-                  <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setCustomClassification('all')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        customClassification === 'all'
-                          ? 'bg-white text-orange-600 shadow-xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Todos ({deviceTypeOptions.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomClassification('ativo')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        customClassification === 'ativo'
-                          ? 'bg-orange-600 text-white shadow-xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-300" />
-                      ⚡ Ativos ({activeDeviceOptions.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomClassification('passivo')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        customClassification === 'passivo'
-                          ? 'bg-slate-900 text-emerald-400 shadow-xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Box className="w-3.5 h-3.5 text-emerald-400" />
-                      📦 Passivos ({passiveDeviceOptions.length})
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategory(true)}
+                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    + Nova Categoria
+                  </button>
                 </div>
 
-                {/* Section A: ATIVOS DE REDE */}
-                {(customClassification === 'all' || customClassification === 'ativo') && (
-                  <div className="p-3.5 rounded-2xl bg-orange-50/40 border border-orange-200/80 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-orange-500 text-white flex items-center justify-center text-xs font-black shadow-xs">
-                          ⚡
+                {/* Categories Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {categories.map((cat) => {
+                    const isSelected = selectedCategoryId === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleSelectCategory(cat.id)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 group ${
+                          isSelected
+                            ? 'border-orange-500 bg-orange-600 text-white shadow-md'
+                            : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50/40 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.2 rounded ${
+                            isSelected ? 'bg-orange-800 text-orange-200' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {cat.badge}
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                         </div>
-                        <div>
-                          <h3 className="text-xs font-black text-orange-950 uppercase tracking-wider">
-                            Ativos de Rede (Equipamentos Energizados / Eletrônicos)
-                          </h3>
-                          <p className="text-[10px] text-orange-800/80">
-                            Dispositivos que ligam na tomada ou fornecem energia elétrica e realizam processamento.
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-200/80 text-orange-900">
-                        {activeDeviceOptions.length} Modelos
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                      {activeDeviceOptions.map((opt) => {
-                        const Icon = opt.icon;
-                        const isSelected = deviceType === opt.type;
-                        return (
-                          <button
-                            key={opt.type}
-                            type="button"
-                            onClick={() => handleSelectDeviceType(opt)}
-                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 relative ${
-                              isSelected
-                                ? 'bg-orange-500 text-white border-orange-600 shadow-md ring-2 ring-orange-400 scale-[1.02]'
-                                : 'bg-white hover:bg-orange-50/60 border-orange-200/70 text-slate-800'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'}`}>
-                                <Icon className="w-4 h-4" />
-                              </div>
-                              {isSelected ? (
-                                <Check className="w-4 h-4 text-white" />
-                              ) : (
-                                <span className="w-2 h-2 rounded-full bg-emerald-500" title="Ativo / Energizado" />
-                              )}
-                            </div>
-                            <div>
-                              <span className={`text-[11px] font-extrabold leading-tight block line-clamp-2 ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                                {opt.label}
-                              </span>
-                              <span className={`text-[9px] font-bold mt-0.5 block truncate ${isSelected ? 'text-orange-100' : 'text-slate-400'}`}>
-                                {opt.badge}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section B: PASSIVOS DE REDE */}
-                {(customClassification === 'all' || customClassification === 'passivo') && (
-                  <div className="p-3.5 rounded-2xl bg-slate-900/5 border border-slate-300 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-slate-800 text-white flex items-center justify-center text-xs font-black shadow-xs">
-                          📦
-                        </div>
-                        <div>
-                          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                            Passivos de Rede (Estrutura, Acomodação, Caixas & Guardar Coisas)
-                          </h3>
-                          <p className="text-[10px] text-slate-600">
-                            Racks, caixas CEO/CTO, DIOs, frentes falsas, bandejas e organizadores sem consumo elétrico.
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 text-slate-800">
-                        {passiveDeviceOptions.length} Modelos
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                      {passiveDeviceOptions.map((opt) => {
-                        const Icon = opt.icon;
-                        const isSelected = deviceType === opt.type;
-                        return (
-                          <button
-                            key={opt.type}
-                            type="button"
-                            onClick={() => handleSelectDeviceType(opt)}
-                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 relative ${
-                              isSelected
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-700 scale-[1.02]'
-                                : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-white/20 text-emerald-300' : 'bg-slate-100 text-slate-700'}`}>
-                                <Icon className="w-4 h-4" />
-                              </div>
-                              {isSelected ? (
-                                <Check className="w-4 h-4 text-emerald-400" />
-                              ) : (
-                                <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded">
-                                  Passivo
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <span className={`text-[11px] font-extrabold leading-tight block line-clamp-2 ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                                {opt.label}
-                              </span>
-                              <span className={`text-[9px] font-bold mt-0.5 block truncate ${isSelected ? 'text-emerald-300' : 'text-slate-400'}`}>
-                                {opt.badge}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Imagem PNG / Ícone Personalizado no Mapa */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/70 to-amber-50/70 border border-orange-200/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-orange-950 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-orange-600" />
-                    2. Imagem PNG do Item no Mapa (Personalizado / Passivo)
-                  </span>
-                  {customImageUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setCustomImageUrl('')}
-                      className="text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Remover Imagem
-                    </button>
-                  )}
+                        <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-900 group-hover:text-orange-600'}`}>
+                          {cat.name}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <p className="text-[11px] text-slate-600">
-                  Adicione uma imagem PNG (fundo transparente recomendado) para este item aparecer personalizado no mapa da topologia.
-                </p>
+                {/* Inline New Category Form Modal / Banner */}
+                {isAddingCategory && (
+                  <form onSubmit={handleCreateNewCategory} className="p-3 bg-white rounded-xl border-2 border-orange-400 shadow-lg space-y-3 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-orange-950 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-orange-600" />
+                        Cadastrar Nova Categoria de Ativo:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCategory(false)}
+                        className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* Image Preview Box */}
-                  <div className="w-20 h-20 rounded-2xl bg-slate-900 border-2 border-dashed border-orange-400/80 flex flex-col items-center justify-center p-2 relative shrink-0 shadow-sm overflow-hidden group">
-                    {customImageUrl ? (
-                      <img
-                        src={customImageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-contain drop-shadow-md"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center text-slate-400 text-center">
-                        <ImageIcon className="w-6 h-6 text-orange-400 mb-1" />
-                        <span className="text-[9px] font-bold">Sem PNG</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Upload Controls & URL input */}
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      <label className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors">
-                        <Upload className="w-3.5 h-3.5" />
-                        Escolher Arquivo PNG...
-                        <input
-                          type="file"
-                          accept="image/png, image/jpeg, image/svg+xml, image/webp"
-                          onChange={handleImageFileUpload}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {/* URL input */}
-                      <div className="flex-1 min-w-[200px] flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs">
-                        <Link2 className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nome da Categoria:</label>
                         <input
                           type="text"
-                          value={customImageUrl}
-                          onChange={(e) => setCustomImageUrl(e.target.value)}
-                          placeholder="Ou cole a URL direta da imagem PNG..."
-                          className="w-full bg-transparent font-medium focus:outline-hidden text-slate-700 placeholder:text-slate-400 text-[11px]"
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                          placeholder="Ex: Firewall UTM, Balanceador SD-WAN, Sensor IoT"
+                          autoFocus
+                          className="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-orange-500 focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Etiqueta / Sigla (Badge):</label>
+                        <input
+                          type="text"
+                          value={newCatBadge}
+                          onChange={(e) => setNewCatBadge(e.target.value)}
+                          placeholder="Ex: UTM / VPN, IoT, Core"
+                          className="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 focus:border-orange-500 focus:outline-hidden"
                         />
                       </div>
                     </div>
 
-                    <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <span>💡 Formatos recomendados: PNG transparente, SVG, WebP ou JPG.</span>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Descrição Técnica:</label>
+                      <input
+                        type="text"
+                        value={newCatDesc}
+                        onChange={(e) => setNewCatDesc(e.target.value)}
+                        placeholder="Ex: Equipamento de segurança e filtragem de tráfego de borda"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 focus:border-orange-500 focus:outline-hidden"
+                      />
                     </div>
-                  </div>
-                </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCategory(false)}
+                        className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-xs cursor-pointer"
+                      >
+                        Salvar Categoria
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
 
-              {/* 3. Informações Gerais do Ativo */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-orange-600" />
-                  3. Especificações do Equipamento
-                </span>
+              {/* 2. DADOS PRINCIPAIS & IDENTIFICAÇÃO DO ATIVO */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-2">
+                  <Server className="w-4 h-4 text-orange-500" />
+                  2. Identificação Principal & Modelo Comercial
+                </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Nome / Identificação *
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Nome / Identificação do Ativo <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Ex: Switch Core POP 01, PABX Matriz, OLT Huawei 1"
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                      placeholder="Ex: Concentrador PPPoE 01, Switch Core Huawei S6730, OLT GPON 01..."
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Hostname / DNS
+                    </label>
+                    <input
+                      type="text"
+                      value={hostname}
+                      onChange={(e) => setHostname(e.target.value)}
+                      placeholder="Ex: bng01.pop.local"
+                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
                       Fabricante / Marca
                     </label>
                     <input
                       type="text"
                       value={vendor}
                       onChange={(e) => setVendor(e.target.value)}
-                      placeholder="MikroTik, Huawei, Cisco, Intelbras, Datacom..."
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                      placeholder="Ex: MikroTik, Huawei, Datacom, Cisco, Intelbras, Dell..."
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Modelo Comercial
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Modelo Comercial / Part Number
                     </label>
                     <input
                       type="text"
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
-                      placeholder="Ex: CIP 800, CCR2004-1G-12S+, MA5608T, S5735"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                      placeholder="Ex: CCR2004-1G-12S+2XS, MA5800-X7..."
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Número de Série (S/N)
+                    </label>
+                    <input
+                      type="text"
+                      value={serialNumber}
+                      onChange={(e) => setSerialNumber(e.target.value)}
+                      placeholder="Ex: SN1234567890ABC"
+                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* Rack & Power Relationship Selectors */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-orange-50/50 rounded-xl border border-orange-200">
+              {/* 3. LOCALIZAÇÃO FÍSICA & INSTALAÇÃO NO RACK 19" */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-2">
+                  <Box className="w-4 h-4 text-orange-500" />
+                  3. Instalação Física & Posicionamento no Rack 19"
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-orange-950 uppercase tracking-wider mb-1">
-                      📦 Instalar Dentro do Rack (Passivo):
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      📦 Instalado Dentro do Rack:
                     </label>
                     <select
                       value={parentRackId}
-                      onChange={(e) => setParentRackId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-orange-200 bg-white text-slate-800 cursor-pointer"
+                      onChange={(e) => {
+                        setParentRackId(e.target.value);
+                        if (e.target.value) {
+                          const r = allNodes.find(n => n.id === e.target.value);
+                          if (r?.folderId) setFolderId(r.folderId);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-orange-200 bg-orange-50/70 text-slate-900 cursor-pointer"
                     >
-                      <option value="">Nenhum (Dispositivo Avulso / Não montado em Rack)</option>
+                      <option value="">Nenhum (Dispositivo Avulso no POP)</option>
                       {existingRacks.map(r => (
                         <option key={r.id} value={r.id}>
-                          🏢 {r.name} ({r.totalRackCapacityU || r.rackUnits || 44}U) - {r.location}
+                          🏢 {r.name} ({r.totalRackCapacityU || r.rackUnits || 44}U)
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-orange-950 uppercase tracking-wider mb-1">
-                      ⚡ Alimentado por (Nobreak / PDU / Tomada):
-                    </label>
-                    <select
-                      value={powerSourceNodeId}
-                      onChange={(e) => setPowerSourceNodeId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-orange-200 bg-white text-slate-800 cursor-pointer"
-                    >
-                      <option value="">Alimentação Direta / Sem Nobreak</option>
-                      {existingPowerSources.map(p => (
-                        <option key={p.id} value={p.id}>
-                          🔌 {p.name} ({p.model})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Conditional fields for Racks and UPS */}
-                {deviceType.includes('rack') && (
-                  <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-indigo-950 uppercase mb-1">Capacidade Total do Rack (U)</label>
-                      <input
-                        type="number"
-                        min={3}
-                        max={60}
-                        value={totalRackCapacityU}
-                        onChange={(e) => setTotalRackCapacityU(parseInt(e.target.value) || 44)}
-                        className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-indigo-200 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-indigo-950 uppercase mb-1">Tipo de Gabinete</label>
-                      <select
-                        value={deviceType === 'rack_wall' ? 'wall' : 'floor'}
-                        onChange={(e) => setDeviceType(e.target.value === 'wall' ? 'rack_wall' : 'rack_floor')}
-                        className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-indigo-200 bg-white cursor-pointer"
-                      >
-                        <option value="floor">Rack de Chão (Servidores / NOC)</option>
-                        <option value="wall">Rack de Parede (Mini Rack)</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {deviceType === 'ups_nobreak' && (
-                  <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-emerald-950 uppercase mb-1">Capacidade de Carga (VA)</label>
-                      <input
-                        type="number"
-                        step={100}
-                        value={capacityVa}
-                        onChange={(e) => setCapacityVa(parseInt(e.target.value) || 3000)}
-                        placeholder="Ex: 3000"
-                        className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-emerald-200 bg-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-emerald-950 uppercase mb-1">Total de Tomadas de Saída</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={24}
-                        value={totalOutlets}
-                        onChange={(e) => setTotalOutlets(parseInt(e.target.value) || 8)}
-                        className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-emerald-200 bg-white font-mono"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Tamanho no Rack (U)
-                    </label>
-                    <select
-                      value={rackUnits}
-                      onChange={(e) => setRackUnits(parseInt(e.target.value))}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white cursor-pointer"
-                    >
-                      <option value={1}>1U (Padrão 19")</option>
-                      <option value={2}>2U</option>
-                      <option value={3}>3U</option>
-                      <option value={4}>4U</option>
-                      <option value={6}>6U (Chassi OLT)</option>
-                      <option value={8}>8U</option>
-                      <option value={44}>44U (Rack Inteiro)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Posição no Rack
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Posição no Rack (Slot U):
                     </label>
                     <input
                       type="text"
                       value={rackPosition}
-                      onChange={(e) => setRackPosition(e.target.value)}
-                      placeholder="Ex: U42, U20, U1"
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                      onChange={(e) => setRackPosition(e.target.value.toUpperCase())}
+                      placeholder="Ex: U42, U40, U38..."
+                      className="w-full px-3 py-2 text-xs font-mono font-bold text-orange-600 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      IP de Gerência / Acesso
-                    </label>
-                    <input
-                      type="text"
-                      value={managementIp}
-                      onChange={(e) => setManagementIp(e.target.value)}
-                      placeholder="192.168.88.1"
-                      className="w-full px-3 py-2 text-xs font-mono text-blue-600 font-bold rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Alimentação Elétrica
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Altura do Chassi (Unidades U):
                     </label>
                     <select
-                      value={powerSupply}
-                      onChange={(e) => setPowerSupply(e.target.value as any)}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white cursor-pointer"
+                      value={rackUnits}
+                      onChange={(e) => setRackUnits(parseInt(e.target.value) || 1)}
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white cursor-pointer"
                     >
-                      <option value="AC 110/220V Bivolt">AC 110/220V Bivolt</option>
-                      <option value="DC -48V Telecom">DC -48V Telecom</option>
-                      <option value="Redundante AC/DC">Redundante AC + DC</option>
-                      <option value="DC 24V">DC 24V</option>
-                      <option value="DC 12V">DC 12V</option>
+                      <option value={1}>1U (Padrão 19 Polegadas)</option>
+                      <option value={2}>2U</option>
+                      <option value={3}>3U</option>
+                      <option value={4}>4U</option>
+                      <option value={6}>6U</option>
+                      <option value={7}>7U</option>
+                      <option value={11}>11U (Chassi OLT Grande)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Fonte Alimentadora / PDU:
+                    </label>
+                    <select
+                      value={powerSourceNodeId}
+                      onChange={(e) => setPowerSourceNodeId(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white cursor-pointer"
+                    >
+                      <option value="">Rede Elétrica Direta</option>
+                      {existingPowerSources.map(p => (
+                        <option key={p.id} value={p.id}>
+                          ⚡ {p.name} ({p.model})
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
               </div>
 
-              {/* 3. Construtor e Gerenciador de Portas */}
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
-                      <Network className="w-4 h-4 text-indigo-600" />
-                      3. Portas do Ativo ({ports.length} Portas Configuradas)
-                    </span>
-                    <p className="text-[11px] text-slate-500">
-                      Configure as interfaces ópticas, elétricas, PON e de telefonia e defina as velocidades de negociação (/10, /100, /1000, /10000 Mbps).
-                    </p>
-                  </div>
+              {/* 4. ESPECIFICAÇÕES DE REDE & GERENCIAMENTO */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-2">
+                  <Network className="w-4 h-4 text-orange-500" />
+                  4. Configurações de Rede, IP & Sistema Operacional
+                </h3>
 
-                  {/* Presets rápidos */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Lotes Rápidos:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleAddPreset('switch_24g_4sfp')}
-                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
-                    >
-                      + 24 GbE + 4x 10G SFP+
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddPreset('switch_48g_4sfp')}
-                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
-                    >
-                      + 48 GbE + 4x 10G SFP+
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddPreset('olt_8pon_4sfp')}
-                      className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold cursor-pointer"
-                    >
-                      + 8 PON GPON + 4x 10G
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddPreset('pabx_8fxs_4fxo_e1')}
-                      className="px-2 py-1 rounded-lg bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 text-[10px] font-bold cursor-pointer"
-                    >
-                      + PABX (8 FXS / 4 FXO / E1)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Batch Port Adder Box */}
-                <div className="p-3 bg-gradient-to-r from-orange-50/60 to-amber-50/60 rounded-xl border border-orange-200 flex flex-wrap items-end gap-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-orange-950 uppercase mb-1">Quantidade</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={96}
-                      value={batchCount}
-                      onChange={(e) => setBatchCount(parseInt(e.target.value) || 1)}
-                      className="w-16 px-2 py-1.5 text-xs font-bold rounded-lg border border-orange-200 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-orange-950 uppercase mb-1">Prefixo do Nome</label>
-                    <input
-                      type="text"
-                      value={batchPrefix}
-                      onChange={(e) => setBatchPrefix(e.target.value)}
-                      placeholder="ether, ge0/0/, sfp, pon"
-                      className="w-24 px-2 py-1.5 text-xs font-bold rounded-lg border border-orange-200 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-orange-950 uppercase mb-1">Tipo de Mídia</label>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Sistema Operacional (SO)
+                    </label>
                     <select
-                      value={batchMediaType}
-                      onChange={(e) => setBatchMediaType(e.target.value as any)}
-                      className="px-2 py-1.5 text-xs font-bold rounded-lg border border-orange-200 bg-white cursor-pointer"
+                      value={osType}
+                      onChange={(e) => setOsType(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white cursor-pointer"
                     >
-                      <option value="ethernet">🔌 Ethernet RJ45 (Cobre)</option>
-                      <option value="fiber">💎 Fibra Óptica (SFP / SFP+)</option>
-                      <option value="pon">⚡ GPON / EPON Óptica</option>
-                      <option value="voice">📞 Telefonia (FXS / FXO / E1)</option>
-                      <option value="serial">⚙️ Console / Gerência</option>
+                      <option value="mikrotik_routeros">MikroTik RouterOS v7/v6</option>
+                      <option value="huawei_vrp">Huawei VRP</option>
+                      <option value="cisco_ios">Cisco IOS / IOS-XR</option>
+                      <option value="linux">Linux / Debian / Ubuntu Server</option>
+                      <option value="generic">Firmware Proprietário / Genérico</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-orange-950 uppercase mb-1">Velocidade / Modo</label>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      IP de Gerência Principal
+                    </label>
+                    <input
+                      type="text"
+                      value={managementIp}
+                      onChange={(e) => setManagementIp(e.target.value)}
+                      placeholder="Ex: 10.100.1.1 ou 192.168.88.1"
+                      className="w-full px-3 py-2 text-xs font-mono font-bold text-blue-600 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Máscara / Gateway
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={netmaskCidr}
+                        onChange={(e) => setNetmaskCidr(e.target.value)}
+                        placeholder="/24"
+                        className="w-20 px-2.5 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-white text-center"
+                      />
+                      <input
+                        type="text"
+                        value={gatewayIp}
+                        onChange={(e) => setGatewayIp(e.target.value)}
+                        placeholder="Gateway: 10.100.1.254"
+                        className="flex-1 px-2.5 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Endereço MAC de Gerência
+                    </label>
+                    <input
+                      type="text"
+                      value={mac}
+                      onChange={(e) => setMac(e.target.value)}
+                      placeholder="Ex: 48:8F:5A:12:34:56"
+                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. ENERGIA & HARDWARE */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-orange-500" />
+                  5. Especificações Elétricas, Térmicas & Hardware
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Alimentação Elétrica
+                    </label>
+                    <select
+                      value={powerSupply}
+                      onChange={(e) => setPowerSupply(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white cursor-pointer"
+                    >
+                      <option value="Redundante AC/DC">Fonte Redundante Dupla (AC/DC)</option>
+                      <option value="AC 110/220V Bivolt">AC 110/220V Bivolt</option>
+                      <option value="DC -48V Telecom">DC -48V Telecom</option>
+                      <option value="PoE 802.3af/at/bt">PoE in (802.3af/at/bt)</option>
+                      <option value="DC 12V Adaptador">DC 12V Adaptador P4</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Consumo Máximo (Watts)
+                    </label>
+                    <input
+                      type="number"
+                      value={powerConsumptionWatts}
+                      onChange={(e) => setPowerConsumptionWatts(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 text-xs font-mono font-bold text-emerald-600 rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Processador / Memória RAM
+                    </label>
+                    <input
+                      type="text"
+                      value={hardwareCpuRam}
+                      onChange={(e) => setHardwareCpuRam(e.target.value)}
+                      placeholder="Ex: 4 Cores 1.7GHz / 4GB RAM"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Capacidade de Comutação / Throughput
+                    </label>
+                    <input
+                      type="text"
+                      value={throughputCapacity}
+                      onChange={(e) => setThroughputCapacity(e.target.value)}
+                      placeholder="Ex: 120 Gbps / 89 Mpps"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. GERENCIADOR DE PORTAS & INTERFACES */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-1.5">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                    <Cable className="w-4 h-4 text-orange-500" />
+                    6. Portas, Interfaces & Módulos Ópticos ({ports.length} Portas)
+                  </h3>
+
+                  {/* Quick Port Presets */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newP: NetworkPort[] = [];
+                        for (let i = 1; i <= 24; i++) {
+                          newP.push({ id: `p-ge-${i}-${Date.now()}`, name: `ge0/${i}`, type: 'copper_1g', mediaType: 'ethernet', speedMode: '1000M', duplex: 'full', status: 'up' });
+                        }
+                        setPorts([...ports, ...newP]);
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      + 24x 1G RJ45
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newP: NetworkPort[] = [];
+                        for (let i = 1; i <= 4; i++) {
+                          newP.push({ id: `p-10g-${i}-${Date.now()}`, name: `sfp-sfpplus${i}`, type: 'sfp_10g', mediaType: 'fiber', speedMode: '10000M', duplex: 'full', status: 'up' });
+                        }
+                        setPorts([...ports, ...newP]);
+                      }}
+                      className="px-2 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      + 4x 10G SFP+
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newP: NetworkPort[] = [];
+                        for (let i = 1; i <= 16; i++) {
+                          newP.push({ id: `p-pon-${i}-${Date.now()}`, name: `gpon 0/1/${i}`, type: 'pon_gpon', mediaType: 'pon', speedMode: '2.5G', duplex: 'full', status: 'up' });
+                        }
+                        setPorts([...ports, ...newP]);
+                      }}
+                      className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      + 16x GPON
+                    </button>
+                  </div>
+                </div>
+
+                {/* Batch Port Adder Bar */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-700">Adicionar em Lote:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={48}
+                      value={batchCount}
+                      onChange={(e) => setBatchCount(parseInt(e.target.value) || 1)}
+                      className="w-16 px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white text-center"
+                    />
+                    <input
+                      type="text"
+                      value={batchPrefix}
+                      onChange={(e) => setBatchPrefix(e.target.value)}
+                      placeholder="Prefixo (ex: ether, sfp+)"
+                      className="w-28 px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white"
+                    />
+                    <select
+                      value={batchMediaType}
+                      onChange={(e) => setBatchMediaType(e.target.value as PortMediaType)}
+                      className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white cursor-pointer"
+                    >
+                      <option value="ethernet">Ethernet (Cobre RJ45)</option>
+                      <option value="fiber">Fibra Óptica (SFP/SFP+)</option>
+                      <option value="pon">Porta PON (GPON/EPON)</option>
+                      <option value="voice">Telefonia FXS/FXO</option>
+                      <option value="power_ac">Tomada Elétrica PDU</option>
+                    </select>
                     <select
                       value={batchSpeedMode}
-                      onChange={(e) => setBatchSpeedMode(e.target.value as any)}
-                      className="px-2 py-1.5 text-xs font-bold rounded-lg border border-orange-200 bg-white cursor-pointer"
+                      onChange={(e) => setBatchSpeedMode(e.target.value as PortSpeedMode)}
+                      className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white cursor-pointer"
                     >
-                      <option value="10M">10 Mbps (/10 - 10Base-T)</option>
-                      <option value="100M">100 Mbps (/100 - Fast Ethernet)</option>
-                      <option value="1000M">1000 Mbps (/1000 - Gigabit 1G)</option>
-                      <option value="2.5G">2.5 Gbps (2.5G / GPON)</option>
-                      <option value="10000M">10000 Mbps (/10000 - 10G SFP+)</option>
-                      <option value="25G">25 Gbps (25G SFP28)</option>
-                      <option value="40G">40 Gbps (40G QSFP+)</option>
-                      <option value="100G">100 Gbps (100G QSFP28)</option>
-                      <option value="auto">Auto / Negociação Automática</option>
+                      <option value="1000M">1 Gbps (1000M)</option>
+                      <option value="10000M">10 Gbps (10G SFP+)</option>
+                      <option value="25G">25 Gbps (SFP28)</option>
+                      <option value="40G">40 Gbps (QSFP+)</option>
+                      <option value="100G">100 Gbps (QSFP28)</option>
+                      <option value="2.5G">2.5G PON</option>
+                      <option value="100M">100 Mbps Fast</option>
+                      <option value="auto">Auto-negotiate</option>
                     </select>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleAddPortBatch}
-                    className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    Adicionar Bloco de Portas
+                    <Plus className="w-3.5 h-3.5 text-orange-400" />
+                    Gerar Portas
                   </button>
                 </div>
 
-                {/* Faceplate do Equipamento (Visualizador Frontal) */}
-                <div className="p-3 bg-slate-900 rounded-2xl text-white space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                    <span>PAINEL FRONTAL: {vendor} {model || name || 'ATIVO'} ({rackUnits}U)</span>
-                    <span>{ports.length} PORTAS</span>
+                {/* Ports List Table */}
+                <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-600 font-bold uppercase tracking-wider text-[10px] sticky top-0">
+                      <tr>
+                        <th className="p-2.5">Nome da Porta</th>
+                        <th className="p-2.5">Mídia</th>
+                        <th className="p-2.5">Velocidade</th>
+                        <th className="p-2.5 text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ports.map((p, idx) => (
+                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              value={p.name}
+                              onChange={(e) => handleUpdatePort(idx, { name: e.target.value })}
+                              className="px-2 py-1 text-xs font-mono font-bold rounded-lg border border-slate-200 bg-white w-full max-w-xs"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              p.mediaType === 'fiber' ? 'bg-cyan-100 text-cyan-800' :
+                              p.mediaType === 'pon' ? 'bg-blue-100 text-blue-800' :
+                              p.mediaType === 'voice' ? 'bg-pink-100 text-pink-800' :
+                              'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {p.mediaType?.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="p-2 font-mono text-[11px] font-bold text-slate-700">
+                            {p.speedMode || '1000M'}
+                          </td>
+                          <td className="p-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePort(p.id)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Remover Porta"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 7. IMAGEM PNG PERSONALIZADA & OBSERVAÇÕES */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* PNG Image Upload */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-orange-600" />
+                      Imagem PNG no Mapa
+                    </span>
+                    {customImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomImageUrl('')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    )}
                   </div>
 
-                  <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-wrap gap-1.5 items-center min-h-[50px]">
-                    {ports.length === 0 ? (
-                      <span className="text-xs text-slate-500 italic p-2">Nenhuma porta adicionada ainda. Adicione acima.</span>
-                    ) : (
-                      ports.map((p, idx) => (
-                        <div
-                          key={p.id}
-                          className={`p-1.5 rounded-lg border text-center text-[10px] font-mono flex flex-col items-center justify-center min-w-[54px] ${
-                            p.mediaType === 'fiber'
-                              ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
-                              : p.mediaType === 'pon'
-                              ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
-                              : p.mediaType === 'voice'
-                              ? 'bg-pink-950/60 border-pink-500/40 text-pink-300'
-                              : 'bg-slate-800 border-slate-700 text-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'up' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                            <span className="font-bold truncate max-w-[45px]">{p.name}</span>
-                          </div>
-                          <span className="text-[8px] opacity-75 font-sans">
-                            {p.speedMode === '10000M' ? '10G' : p.speedMode === '1000M' ? '1G' : p.speedMode || '1G'}
-                          </span>
-                        </div>
-                      ))
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1 shrink-0 overflow-hidden shadow-inner">
+                      {customImageUrl ? (
+                        <img src={customImageUrl} alt="Preview" className="w-full h-full object-contain" />
+                      ) : (
+                        <Server className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                    <label className="flex-1 py-2 px-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-2xs cursor-pointer transition-colors">
+                      <Upload className="w-4 h-4" />
+                      Carregar Imagem PNG do Ativo...
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                        onChange={handleImageFileUpload}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 </div>
 
-                {/* Ports Table List */}
-                {ports.length > 0 && (
-                  <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] sticky top-0">
-                        <tr>
-                          <th className="p-2">#</th>
-                          <th className="p-2">Nome Interface</th>
-                          <th className="p-2">Mídia</th>
-                          <th className="p-2">Velocidade / Modo</th>
-                          <th className="p-2">Duplex</th>
-                          <th className="p-2 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {ports.map((p, idx) => (
-                          <tr key={p.id} className="hover:bg-slate-50">
-                            <td className="p-2 font-mono text-slate-400 text-[10px]">{idx + 1}</td>
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={p.name}
-                                onChange={(e) => handleUpdatePort(idx, { name: e.target.value })}
-                                className="px-2 py-1 font-bold text-slate-800 bg-slate-50 rounded-lg border border-slate-200 w-36 text-xs"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <select
-                                value={p.mediaType || 'ethernet'}
-                                onChange={(e) => handleUpdatePort(idx, { mediaType: e.target.value as any })}
-                                className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white cursor-pointer"
-                              >
-                                <option value="ethernet">Ethernet RJ45</option>
-                                <option value="fiber">Fibra SFP/SFP+</option>
-                                <option value="pon">GPON / EPON</option>
-                                <option value="voice">Telefonia VoIP</option>
-                                <option value="serial">Console / Serial</option>
-                              </select>
-                            </td>
-                            <td className="p-2">
-                              <select
-                                value={p.speedMode || '1000M'}
-                                onChange={(e) => handleUpdatePort(idx, { speedMode: e.target.value as any })}
-                                className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-200 bg-white cursor-pointer"
-                              >
-                                <option value="10M">10 Mbps (/10)</option>
-                                <option value="100M">100 Mbps (/100)</option>
-                                <option value="1000M">1000 Mbps (/1000 - 1G)</option>
-                                <option value="2.5G">2.5 Gbps (PON)</option>
-                                <option value="10000M">10000 Mbps (/10000 - 10G)</option>
-                                <option value="25G">25 Gbps</option>
-                                <option value="40G">40 Gbps</option>
-                                <option value="100G">100 Gbps</option>
-                                <option value="auto">Auto-negociação</option>
-                              </select>
-                            </td>
-                            <td className="p-2">
-                              <select
-                                value={p.duplex || 'full'}
-                                onChange={(e) => handleUpdatePort(idx, { duplex: e.target.value as any })}
-                                className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white cursor-pointer"
-                              >
-                                <option value="full">Full Duplex</option>
-                                <option value="half">Half Duplex</option>
-                                <option value="auto">Auto</option>
-                              </select>
-                            </td>
-                            <td className="p-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePort(p.id)}
-                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {/* Technical Notes */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Anotações Técnicas / VLANs de Acesso
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Ex: VLAN 100 Trânsito, VLAN 200 CGNAT, Senha padrão alterada no TACACS..."
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* 8. AUTO-SAVE TEMPLATE CHECKBOX */}
+              <div className="p-3.5 bg-orange-50/80 rounded-2xl border border-orange-200 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="save_template_chk"
+                    checked={saveAsTemplate}
+                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                    className="w-4 h-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500 cursor-pointer"
+                  />
+                  <label htmlFor="save_template_chk" className="text-xs font-bold text-orange-950 cursor-pointer">
+                    Salvar este modelo na <strong>Biblioteca de Modelos Pré-Cadastrados</strong> para reutilizar em outros POPs futuramente.
+                  </label>
+                </div>
+                <Bookmark className="w-4 h-4 text-orange-600" />
               </div>
             </div>
           ) : (
-            /* Tab: Biblioteca de Modelos Pré-Cadastrados */
+            /* TAB 2: BIBLIOTECA DE MODELOS PRÉ-CADASTRADOS */
             <div className="space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                {/* Search */}
-                <input
-                  type="text"
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Pesquisar modelo (MikroTik CCR, Huawei OLT, Intelbras PABX, Cisco, DIO, Rack...)"
-                  className="px-4 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden w-full md:w-80 font-medium"
-                />
-
-                {/* Classification Primary Pills */}
-                <div className="flex items-center p-1 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setCatalogClassification('all')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      catalogClassification === 'all'
-                        ? 'bg-orange-600 text-white font-black shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Todos ({DEVICE_CATALOG.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCatalogClassification('ativo')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      catalogClassification === 'ativo'
-                        ? 'bg-orange-500 text-white font-black shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-300" />
-                    ⚡ Ativos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCatalogClassification('passivo')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      catalogClassification === 'passivo'
-                        ? 'bg-slate-900 text-emerald-400 font-black shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Box className="w-3.5 h-3.5 text-emerald-400" />
-                    📦 Passivos
-                  </button>
+              {/* Header & Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="Pesquisar por modelo, fabricante ou função..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
                 </div>
 
-                {/* Category filters */}
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { id: 'all', label: 'Todas Categorias' },
-                    { id: 'isp_core', label: 'Core / BGP / Switch' },
-                    { id: 'access_ftth', label: 'OLTs & FTTH' },
-                    { id: 'telephony_voip', label: 'PABX / Telefonia' },
-                    { id: 'rack_power', label: 'Energia' },
-                    { id: 'passive', label: 'Racks & Passivos' },
-                  ].map(c => (
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateCatFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      templateCatFilter === 'all'
+                        ? 'bg-orange-600 text-white shadow-2xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    Todos ({allAvailableTemplates.length})
+                  </button>
+                  {savedTemplates.length > 0 && (
                     <button
-                      key={c.id}
                       type="button"
-                      onClick={() => setSelectedCatalogCategory(c.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        selectedCatalogCategory === c.id
-                          ? 'bg-orange-600 text-white shadow-xs'
-                          : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                      onClick={() => setTemplateCatFilter('Personalizado')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        templateCatFilter === 'Personalizado'
+                          ? 'bg-orange-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
                       }`}
                     >
-                      {c.label}
+                      ⭐ Meus Modelos ({savedTemplates.length})
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
 
-              {/* Grid of Catalog items */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredCatalog.map((item, idx) => {
-                  const isPassive = item.category === 'passive' || item.category === 'cabling_structure' || item.type.includes('rack') || item.type.includes('dio') || item.type.includes('cto') || item.type.includes('ceo') || item.type.includes('organizer') || item.type.includes('blank') || item.type.includes('tray') || item.type.includes('splitter');
+              {/* Grid of Templates */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredTemplates.map((tpl, idx) => {
+                  const isUserSaved = 'isCustomTemplate' in tpl && tpl.isCustomTemplate;
                   return (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-orange-400 hover:shadow-md transition-all flex flex-col justify-between gap-3 group"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                          {item.vendor}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {isPassive ? (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
-                              📦 Passivo
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                              ⚡ Ativo
-                            </span>
-                          )}
-                          {item.rackUnits && (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group relative ${
+                        isUserSaved
+                          ? 'bg-orange-50/30 border-orange-300 hover:border-orange-500 shadow-sm'
+                          : 'bg-white border-slate-200 hover:border-orange-400 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                            {tpl.vendor}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isUserSaved && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-900 border border-orange-200">
+                                ⭐ Salvo por Você
+                              </span>
+                            )}
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {item.rackUnits}U Rack
+                              {tpl.rackUnits || 1}U
+                            </span>
+                          </div>
+                        </div>
+
+                        <h4 className="text-sm font-black text-slate-900 group-hover:text-orange-600 transition-colors">
+                          {tpl.name}
+                        </h4>
+                        <p className="text-xs font-mono font-bold text-slate-500">
+                          {tpl.model}
+                        </p>
+                        <p className="text-xs text-slate-600 line-clamp-2">
+                          {(tpl as any).notes || (tpl as any).description || 'Ativo de alta performance para operação telecom.'}
+                        </p>
+
+                        {/* Ports Badges */}
+                        <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1">
+                          {(tpl.defaultPorts || []).slice(0, 4).map((p, pIdx) => (
+                            <span key={pIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono">
+                              {p.name} ({p.speedMode || p.type})
+                            </span>
+                          ))}
+                          {(tpl.defaultPorts || []).length > 4 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold">
+                              +{(tpl.defaultPorts || []).length - 4} portas
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <h4 className="text-sm font-black text-slate-900 group-hover:text-orange-600 transition-colors">
-                        {item.name}
-                      </h4>
-                      <p className="text-xs font-mono font-bold text-slate-500">
-                        {item.model}
-                      </p>
-                      <p className="text-xs text-slate-600 line-clamp-2">
-                        {item.description}
-                      </p>
-
-                      {/* Ports Badges */}
-                      <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1">
-                        {item.defaultPorts.slice(0, 4).map((p, pIdx) => (
-                          <span key={pIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono">
-                            {p.name} ({p.speedMode || p.type})
-                          </span>
-                        ))}
-                        {item.defaultPorts.length > 4 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold">
-                            +{item.defaultPorts.length - 4} portas
-                          </span>
+                      {/* Action Buttons */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleInstantiateFromTemplate(tpl)}
+                          className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          Copiar & Usar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadTemplateIntoForm(tpl)}
+                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                          title="Carregar no Formulário para Editar"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        {isUserSaved && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustomTemplate(tpl.id, e)}
+                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                            title="Excluir este Modelo Salvo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSelectFromCatalog(item)}
-                      className="w-full py-2 rounded-xl bg-orange-50 hover:bg-orange-600 text-orange-700 hover:text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Instanciar neste POP / Pasta
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1446,10 +1377,10 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
             Cancelar
           </button>
 
-          {activeTab === 'custom' && (
+          {activeTab === 'create_scratch' && (
             <button
               type="button"
-              onClick={handleSaveCustomDevice}
+              onClick={handleSaveActiveAsset}
               className="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs shadow-md flex items-center gap-2 transition-all cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
