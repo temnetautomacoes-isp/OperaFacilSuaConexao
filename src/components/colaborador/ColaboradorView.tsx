@@ -315,9 +315,9 @@ export const ColaboradorView: React.FC = () => {
     <div className="flex-1 flex flex-col lg:flex-row bg-[#F8F9FF] text-slate-800 antialiased overflow-hidden select-none">
       
       {/* ========================================================================= */}
-      {/* 1. ABA LATERAL ESQUERDA DO COLABORADOR COM BOTÃO DESLOGAR NA PARTE INFERIOR */}
+      {/* 1. ABA LATERAL ESQUERDA DO COLABORADOR (DESKTOP) COM BOTÃO DESLOGAR */}
       {/* ========================================================================= */}
-      <aside className="w-full lg:w-64 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between shrink-0 shadow-xs">
+      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col justify-between shrink-0 shadow-xs select-none">
         
         {/* Top Section / Navigation Tabs */}
         <div className="p-4 space-y-3">
@@ -350,14 +350,6 @@ export const ColaboradorView: React.FC = () => {
                   </span>
                 </div>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-                className="lg:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
             </div>
 
             {/* Live Clock & Date */}
@@ -374,13 +366,10 @@ export const ColaboradorView: React.FC = () => {
           </div>
 
           {/* Navigation Buttons */}
-          <nav className={`space-y-1 ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
+          <nav className="space-y-1">
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('ponto');
-                setIsMobileNavOpen(false);
-              }}
+              onClick={() => setActiveTab('ponto')}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'ponto'
                   ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
@@ -396,10 +385,7 @@ export const ColaboradorView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('folha');
-                setIsMobileNavOpen(false);
-              }}
+              onClick={() => setActiveTab('folha')}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'folha'
                   ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
@@ -414,10 +400,7 @@ export const ColaboradorView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('documentos');
-                setIsMobileNavOpen(false);
-              }}
+              onClick={() => setActiveTab('documentos')}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'documentos'
                   ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
@@ -437,10 +420,7 @@ export const ColaboradorView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('perfil');
-                setIsMobileNavOpen(false);
-              }}
+              onClick={() => setActiveTab('perfil')}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'perfil'
                   ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-xs'
@@ -457,7 +437,7 @@ export const ColaboradorView: React.FC = () => {
         </div>
 
         {/* Bottom Area: Deslogar Button at the very bottom */}
-        <div className={`p-4 border-t border-slate-100 bg-slate-50/80 text-xs ${isMobileNavOpen ? 'block' : 'hidden lg:block'}`}>
+        <div className="p-4 border-t border-slate-100 bg-slate-50/80 text-xs">
           {/* Deslogar Button */}
           <button
             type="button"
@@ -478,7 +458,7 @@ export const ColaboradorView: React.FC = () => {
       {/* ========================================================================= */}
       {/* 2. ÁREA DE CONTEÚDO PRINCIPAL (CLARA & ELEGANTE) */}
       {/* ========================================================================= */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-24 lg:pb-8">
 
         {/* ======================================================================= */}
         {/* TAB 1: BATER PONTO ELETRÔNICO COM BIOMETRIA & DESIGN LÚDICO */}
@@ -1822,6 +1802,78 @@ export const ColaboradorView: React.FC = () => {
         isOpen={showCompanyInfo}
         onClose={() => setShowCompanyInfo(false)}
       />
+
+      {/* Modern Mobile Bottom Navigation Bar for Colaborador (iOS / Smartphone layout) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 flex items-center justify-around py-2 px-2 shadow-2xl safe-area-bottom">
+        <button
+          type="button"
+          onClick={() => setActiveTab('ponto')}
+          className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'ponto' ? 'text-orange-400 font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Clock className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Ponto</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('folha')}
+          className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'folha' ? 'text-orange-400 font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Folha</span>
+        </button>
+
+        {/* Central Highlighted Quick Punch / Ponto Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('ponto');
+            setTargetPunchType(nextPunchInfo.type);
+            setIsBiometricModalOpen(true);
+          }}
+          className="flex flex-col items-center -mt-5 cursor-pointer"
+        >
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-95 bg-gradient-to-tr from-orange-600 to-amber-500 text-white ring-4 ring-slate-900 shadow-orange-500/30">
+            <Fingerprint className="w-6 h-6" />
+          </div>
+          <span className="text-[10px] font-bold mt-1 text-orange-400">
+            Bater
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('documentos')}
+          className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all relative cursor-pointer ${
+            activeTab === 'documentos' ? 'text-orange-400 font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <div className="relative">
+            <FileCheck className="w-5 h-5" />
+            {myDocuments.length > 0 && (
+              <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-orange-500 text-white text-[8px] font-black rounded-full flex items-center justify-center">
+                {myDocuments.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] tracking-tight">Docs</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('perfil')}
+          className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'perfil' ? 'text-orange-400 font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Perfil</span>
+        </button>
+      </nav>
 
     </div>
   );
