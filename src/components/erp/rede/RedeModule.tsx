@@ -14,13 +14,26 @@ export const RedeModule: React.FC = () => {
   // Main Sub-Tab: 'documentacao' (Primary / SGP TSMX) or 'oficina' (Testing & Simulator)
   const [activeSubTab, setActiveSubTab] = useState<'documentacao' | 'oficina'>('documentacao');
 
+  // Helper to purge legacy example/mock data from localStorage
+  const isMockData = (parsed: any): boolean => {
+    if (!parsed) return false;
+    if (parsed.id === 'topo-default-isp') return true;
+    if (Array.isArray(parsed.folders) && parsed.folders.some((f: any) => f.id === 'f-ala' || f.name === 'ALAGOINHAS' || f.name === 'Aramari' || f.name === 'Ouriçangas')) return true;
+    if (Array.isArray(parsed.nodes) && parsed.nodes.some((n: any) => n.id === 'node-cloud-1' || n.name?.includes('Internet / Trânsito IP') || n.name?.includes('Roteador BGP Core'))) return true;
+    return false;
+  };
+
   // Folders state (SGP TSMX tree)
   const [folders, setFolders] = useState<NetworkFolder[]>(() => {
     try {
       const saved = localStorage.getItem('operafacil_network_topology');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.folders && Array.isArray(parsed.folders) && parsed.folders.length > 0) {
+        if (isMockData(parsed)) {
+          localStorage.removeItem('operafacil_network_topology');
+          return [];
+        }
+        if (parsed.folders && Array.isArray(parsed.folders)) {
           return parsed.folders;
         }
       }
@@ -28,7 +41,7 @@ export const RedeModule: React.FC = () => {
     return INITIAL_FOLDERS;
   });
 
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>('f-ala');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   // Topology state (Nodes and Links)
   const [nodes, setNodes] = useState<NetworkNode[]>(() => {
@@ -36,7 +49,8 @@ export const RedeModule: React.FC = () => {
       const saved = localStorage.getItem('operafacil_network_topology');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.nodes && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+        if (isMockData(parsed)) return [];
+        if (parsed.nodes && Array.isArray(parsed.nodes)) {
           return parsed.nodes;
         }
       }
@@ -49,7 +63,8 @@ export const RedeModule: React.FC = () => {
       const saved = localStorage.getItem('operafacil_network_topology');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.links && Array.isArray(parsed.links) && parsed.links.length > 0) {
+        if (isMockData(parsed)) return [];
+        if (parsed.links && Array.isArray(parsed.links)) {
           return parsed.links;
         }
       }

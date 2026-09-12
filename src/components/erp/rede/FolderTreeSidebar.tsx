@@ -438,7 +438,22 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
 
       {/* Tree View Body */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1 font-sans">
-        {rootFolders.map((root) => renderFolderItem(root, 0))}
+        {rootFolders.length === 0 ? (
+          <div className="p-5 text-center text-slate-400 space-y-2.5 my-4">
+            <Folder className="w-8 h-8 mx-auto text-slate-300 opacity-60" />
+            <p className="text-[11px] font-medium text-slate-500">Nenhuma pasta cadastrada</p>
+            <button
+              type="button"
+              onClick={() => handleStartCreate(null)}
+              className="px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer border border-orange-200 shadow-2xs"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Criar Pasta / POP</span>
+            </button>
+          </div>
+        ) : (
+          rootFolders.map((root) => renderFolderItem(root, 0))
+        )}
       </div>
 
       {/* Footer Info / Selected Folder Summary */}
