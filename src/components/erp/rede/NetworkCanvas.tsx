@@ -473,6 +473,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           const isSelected = selectedNodeId === node.id;
           const isConnectSource = connectingSourceId === node.id;
           const customImg = node.customImageUrl || node.imageUrl;
+          const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
 
           return (
             <div
