@@ -15,6 +15,7 @@ import {
 } from '../../types';
 import { DivisionFlowCanvas } from './DivisionFlowCanvas';
 import { AvatarCropModal } from '../common/AvatarCropModal';
+import { supabaseService } from '../../services/supabaseService';
 import { 
   Users, 
   Clock, 
@@ -423,7 +424,7 @@ export const RecursosHumanosModule: React.FC = () => {
   }, [employeeDocuments, docUserId, docCategory, searchTerm, users]);
 
   // Handle File Input for Document Upload
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const sizeStr = file.size > 1024 * 1024 
@@ -437,15 +438,24 @@ export const RecursosHumanosModule: React.FC = () => {
         name: prev.name || file.name.replace(/\.[^/.]+$/, "")
       }));
 
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
+      try {
+        const publicUrl = await supabaseService.uploadFile(file, 'documents');
         setUploadDocForm((prev) => ({
           ...prev,
-          fileUrl: result
+          fileUrl: publicUrl
         }));
-      };
-      reader.readAsDataURL(file);
+      } catch (uploadErr) {
+        console.warn('Falha no upload para o Supabase Storage, utilizando fallback local base64:', uploadErr);
+        const reader = new FileReader();
+        reader.onload = (uploadEvent) => {
+          const result = uploadEvent.target?.result as string;
+          setUploadDocForm((prev) => ({
+            ...prev,
+            fileUrl: result
+          }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

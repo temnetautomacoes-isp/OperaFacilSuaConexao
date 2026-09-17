@@ -28,6 +28,7 @@ import { GondolaCategorySelector, getSavedGondolaCategories } from '../common/Go
 import { DuplicateBarcodeModal } from '../common/DuplicateBarcodeModal';
 import { ProductDetailModal } from '../common/ProductDetailModal';
 import { BarcodeScannerModal } from '../common/BarcodeScannerModal';
+import { supabaseService } from '../../services/supabaseService';
 import { StockEntryModal } from './StockEntryModal';
 
 const DEFAULT_CATEGORIES: ('Todas' | ProductCategory)[] = [
@@ -251,7 +252,7 @@ export const EstoqueModule: React.FC = () => {
     setFormBarcode(`789${Math.floor(1000000000 + Math.random() * 9000000000)}`);
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -269,13 +270,19 @@ export const EstoqueModule: React.FC = () => {
     }
 
     setImageUploadError(null);
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      if (uploadEvent.target?.result) {
-        setFormImageUrl(uploadEvent.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const publicUrl = await supabaseService.uploadFile(file, 'general');
+      setFormImageUrl(publicUrl);
+    } catch (uploadErr) {
+      console.warn('Falha no upload para o Supabase Storage, utilizando fallback local base64:', uploadErr);
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        if (uploadEvent.target?.result) {
+          setFormImageUrl(uploadEvent.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmitForm = (e: React.FormEvent) => {

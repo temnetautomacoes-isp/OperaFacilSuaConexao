@@ -28,10 +28,10 @@ import {
   DollarSign,
   BarChart3,
   Phone,
-  UserCheck,
-  Move
+  FileSpreadsheet
 } from 'lucide-react';
 import { AvatarCropModal } from '../common/AvatarCropModal';
+import { supabaseService } from '../../services/supabaseService';
 
 const _d = (s: string) => typeof atob !== 'undefined' ? atob(s) : Buffer.from(s, 'base64').toString('utf-8');
 const _SA_USER = _d('ZWR1YXJkb3N1cGVyYWRtaW4=');
@@ -92,7 +92,7 @@ export const ConfiguracoesModule: React.FC = () => {
     canAccessConfiguracoes: false,
   });
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -106,13 +106,19 @@ export const ConfiguracoesModule: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        setLogoUrl(event.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const publicUrl = await supabaseService.uploadFile(file, 'general');
+      setLogoUrl(publicUrl);
+    } catch (uploadErr) {
+      console.warn('Falha no upload para o Supabase Storage, utilizando fallback local base64:', uploadErr);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          setLogoUrl(event.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

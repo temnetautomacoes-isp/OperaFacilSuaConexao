@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { NetworkNode, NetworkFolder } from '../../../types/network';
 import { NewPassiveModal } from './NewPassiveModal';
+import { supabaseService } from '../../../services/supabaseService';
 
 interface RackElevationModalProps {
   rackNode: NetworkNode | null;
@@ -252,7 +253,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
     setEditingAssetNode(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!editingAssetNode) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -260,18 +261,28 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
         alert('Por favor, selecione um arquivo de imagem válido (PNG, SVG, JPG, WebP).');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const url = event.target.result as string;
-          setEditFormData(prev => ({
-            ...prev,
-            customImageUrl: url,
-            imageUrl: url,
-          }));
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const publicUrl = await supabaseService.uploadFile(file, 'network/devices');
+        setEditFormData(prev => ({
+          ...prev,
+          customImageUrl: publicUrl,
+          imageUrl: publicUrl,
+        }));
+      } catch (uploadErr) {
+        console.warn('Falha no upload para o Supabase Storage, utilizando fallback local base64:', uploadErr);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            const url = event.target.result as string;
+            setEditFormData(prev => ({
+              ...prev,
+              customImageUrl: url,
+              imageUrl: url,
+            }));
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

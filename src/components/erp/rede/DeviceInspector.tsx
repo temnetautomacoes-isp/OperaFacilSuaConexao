@@ -20,6 +20,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { NetworkNode, NetworkLink, NetworkFolder } from '../../../types/network';
+import { supabaseService } from '../../../services/supabaseService';
 
 interface DeviceInspectorProps {
   selectedNode: NetworkNode | null;
@@ -83,7 +84,7 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
   const poweredDevicesByThisNode = isPowerSource ? allNodes.filter(n => n.powerSourceNodeId === selectedNode.id) : [];
   const totalPowerConsumedWatts = poweredDevicesByThisNode.reduce((sum, n) => sum + (n.powerConsumptionWatts || 35), 0);
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedNode) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -91,18 +92,28 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
         alert('Por favor, selecione um arquivo de imagem válido (PNG, SVG, JPG, WebP).');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const url = event.target.result as string;
-          onUpdateNode({
-            ...selectedNode,
-            customImageUrl: url,
-            imageUrl: url,
-          });
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const publicUrl = await supabaseService.uploadFile(file, 'network/devices');
+        onUpdateNode({
+          ...selectedNode,
+          customImageUrl: publicUrl,
+          imageUrl: publicUrl,
+        });
+      } catch (err) {
+        console.error('Erro ao enviar imagem ao Supabase Storage:', err);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            const url = event.target.result as string;
+            onUpdateNode({
+              ...selectedNode,
+              customImageUrl: url,
+              imageUrl: url,
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

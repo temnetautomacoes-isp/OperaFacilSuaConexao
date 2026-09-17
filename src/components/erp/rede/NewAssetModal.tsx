@@ -39,12 +39,13 @@ import {
   NetworkPort, 
   NetworkFolder, 
   DeviceType, 
-  DeviceCategory,
-  PortMediaType,
-  PortSpeedMode,
-  PortDuplex,
-  PortPoe
+  DeviceCategory, 
+  PortMediaType, 
+  PortSpeedMode, 
+  PortDuplex, 
+  PortPoe 
 } from '../../../types/network';
+import { supabaseService } from '../../../services/supabaseService';
 import { DEVICE_CATALOG } from './initialNetworkData';
 
 export interface ActiveCategory {
@@ -278,20 +279,26 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     setNewCatDesc('');
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
         alert('Por favor, selecione um arquivo de imagem válido (PNG, SVG, JPG, WebP).');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setCustomImageUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const publicUrl = await supabaseService.uploadFile(file, 'network/devices');
+        setCustomImageUrl(publicUrl);
+      } catch (err) {
+        console.error('Erro ao enviar imagem ao Supabase Storage:', err);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setCustomImageUrl(event.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

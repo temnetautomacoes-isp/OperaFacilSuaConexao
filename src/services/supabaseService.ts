@@ -16,6 +16,14 @@ export interface GondolaCategoryItem {
   };
 }
 
+export interface StoreSettings {
+  name?: string;
+  slogan?: string;
+  cnpj?: string;
+  phone?: string;
+  logoUrl?: string;
+}
+
 export const supabaseService = {
   // -------------------------------------------------------------
   // GONDOLA CATEGORIES
@@ -63,6 +71,7 @@ export const supabaseService = {
       }
     }
   },
+
   // -------------------------------------------------------------
   // COMPANY INFO / SETTINGS
   // -------------------------------------------------------------
@@ -468,6 +477,60 @@ export const supabaseService = {
 
     if (error) {
       console.error('[SupabaseService] Erro ao salvar network_topology:', error);
+    }
+  },
+
+  // -------------------------------------------------------------
+  // ARMAZENAMENTO DE ARQUIVOS (SUPABASE FILE STORAGE)
+  // -------------------------------------------------------------
+  /**
+   * Faz upload de qualquer arquivo ou imagem diretamente para o Supabase File Storage.
+   * Retorna a URL pública do arquivo alocado.
+   */
+  async uploadFile(
+    file: File | Blob, 
+    folder: 'network/devices' | 'documents' | 'os/attachments' | 'profiles' | 'financial' | 'general' = 'general',
+    customFileName?: string
+  ): Promise<string> {
+    const fileExt = file instanceof File ? (file.name.split('.').pop() || 'png') : 'png';
+    const cleanName = customFileName 
+      ? `${customFileName.replace(/[^a-zA-Z0-9_-]/g, '_')}.${fileExt}`
+      : `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+    
+    const filePath = `${folder}/${cleanName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('operafacil-media')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[SupabaseStorage] Erro no upload:', uploadError);
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from('operafacil-media')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  },
+
+  /**
+   * Remove um arquivo do Supabase File Storage pela sua URL ou caminho
+   */
+  async deleteFile(fileUrlOrPath: string): Promise<void> {
+    try {
+      let path = fileUrlOrPath;
+      if (fileUrlOrPath.includes('/storage/v1/object/public/operafacil-media/')) {
+        path = fileUrlOrPath.split('/storage/v1/object/public/operafacil-media/')[1];
+      }
+      if (!path) return;
+      await supabase.storage.from('operafacil-media').remove([path]);
+    } catch (err) {
+      console.warn('[SupabaseStorage] Erro ao deletar arquivo:', err);
     }
   },
 };

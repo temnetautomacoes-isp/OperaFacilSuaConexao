@@ -20,6 +20,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { NetworkNode, DeviceType, DeviceCategory, NetworkPort } from '../../../types/network';
+import { supabaseService } from '../../../services/supabaseService';
 
 export interface SavedPassiveTemplate {
   id: string;
@@ -135,20 +136,26 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
         alert('Por favor, selecione um arquivo de imagem válido (PNG, SVG, JPG, WebP).');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setCustomImageUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const publicUrl = await supabaseService.uploadFile(file, 'network/devices');
+        setCustomImageUrl(publicUrl);
+      } catch (err) {
+        console.error('Erro ao enviar imagem ao Supabase Storage:', err);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setCustomImageUrl(event.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
