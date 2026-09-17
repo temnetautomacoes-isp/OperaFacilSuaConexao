@@ -22,8 +22,6 @@ export const RedeModule: React.FC = () => {
   const isMockData = (parsed: any): boolean => {
     if (!parsed) return false;
     if (parsed.id === 'topo-default-isp') return true;
-    if (Array.isArray(parsed.folders) && parsed.folders.some((f: any) => f.id === 'f-ala' || f.name === 'ALAGOINHAS' || f.name === 'Aramari' || f.name === 'Ouriçangas')) return true;
-    if (Array.isArray(parsed.nodes) && parsed.nodes.some((n: any) => n.id === 'node-cloud-1' || n.name?.includes('Internet / Trânsito IP') || n.name?.includes('Roteador BGP Core'))) return true;
     return false;
   };
 
@@ -103,29 +101,13 @@ export const RedeModule: React.FC = () => {
     async function loadCloudTopology() {
       try {
         const cloudTopo = await supabaseService.fetchNetworkTopology();
-        if (cloudTopo && (cloudTopo.folders.length > 0 || cloudTopo.nodes.length > 0 || cloudTopo.links.length > 0 || (cloudTopo.shapes && cloudTopo.shapes.length > 0))) {
+        if (cloudTopo && (cloudTopo.folders?.length > 0 || cloudTopo.nodes?.length > 0 || cloudTopo.links?.length > 0 || (cloudTopo.shapes && cloudTopo.shapes.length > 0))) {
           if (!isMockData(cloudTopo)) {
             setFolders(cloudTopo.folders || []);
             setNodes(cloudTopo.nodes || []);
             setLinks(cloudTopo.links || []);
-
-            // Preserve local shapes if cloud shapes was empty
-            const saved = localStorage.getItem('operafacil_network_topology');
-            let localShapes: CanvasShape[] = [];
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed.shapes)) localShapes = parsed.shapes;
-              } catch {}
-            }
-            const shapesToUse = (cloudTopo.shapes && cloudTopo.shapes.length > 0) ? cloudTopo.shapes : localShapes;
-            setShapes(shapesToUse);
-
-            const mergedTopo = { ...cloudTopo, shapes: shapesToUse };
-            safeSetItem('operafacil_network_topology', mergedTopo);
-            if ((!cloudTopo.shapes || cloudTopo.shapes.length === 0) && shapesToUse.length > 0) {
-              supabaseService.saveNetworkTopology(mergedTopo).catch(console.error);
-            }
+            setShapes(cloudTopo.shapes || []);
+            safeSetItem('operafacil_network_topology', cloudTopo);
           }
         } else {
           // If cloud is empty but local has valid user data, sync local to cloud
@@ -390,31 +372,93 @@ export const RedeModule: React.FC = () => {
   };
 
   // Update or Upsert Node Properties
+  // Update or Upsert Node Properties
   const handleUpdateNode = (updatedNode: NetworkNode) => {
     setNodes((prev) => {
       const exists = prev.some((n) => n.id === updatedNode.id);
-      if (exists) {
-        return prev.map((n) => (n.id === updatedNode.id ? updatedNode : n));
-      }
-      return [...prev, updatedNode];
+      const nextNodes = exists
+        ? prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+        : [...prev, updatedNode];
+      
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes: nextNodes,
+        links,
+        shapes,
+      };
+      safeSetItem('operafacil_network_topology', topo);
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return nextNodes;
     });
   };
 
   // Delete Node
   const handleDeleteNode = (nodeId: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
-    setLinks((prev) => prev.filter((l) => l.sourceNodeId !== nodeId && l.targetNodeId !== nodeId));
+    setNodes((prevNodes) => {
+      const nextNodes = prevNodes.filter((n) => n.id !== nodeId);
+      setLinks((prevLinks) => {
+        const nextLinks = prevLinks.filter((l) => l.sourceNodeId !== nodeId && l.targetNodeId !== nodeId);
+        const topo: TopologyData = {
+          id: 'topo-main',
+          name: 'Topologia e Documentação de Rede',
+          updatedAt: new Date().toISOString(),
+          gridSnap: true,
+          folders,
+          nodes: nextNodes,
+          links: nextLinks,
+          shapes,
+        };
+        safeSetItem('operafacil_network_topology', topo);
+        supabaseService.saveNetworkTopology(topo).catch(console.error);
+        return nextLinks;
+      });
+      return nextNodes;
+    });
     setSelectedNodeId(null);
   };
 
   // Update Link Properties
   const handleUpdateLink = (updatedLink: NetworkLink) => {
-    setLinks((prev) => prev.map((l) => (l.id === updatedLink.id ? updatedLink : l)));
+    setLinks((prev) => {
+      const nextLinks = prev.map((l) => (l.id === updatedLink.id ? updatedLink : l));
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes,
+        links: nextLinks,
+        shapes,
+      };
+      safeSetItem('operafacil_network_topology', topo);
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return nextLinks;
+    });
   };
 
   // Delete Link
   const handleDeleteLink = (linkId: string) => {
-    setLinks((prev) => prev.filter((l) => l.id !== linkId));
+    setLinks((prev) => {
+      const nextLinks = prev.filter((l) => l.id !== linkId);
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes,
+        links: nextLinks,
+        shapes,
+      };
+      safeSetItem('operafacil_network_topology', topo);
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return nextLinks;
+    });
     setSelectedLinkId(null);
   };
 

@@ -99,6 +99,9 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
           customImageUrl: publicUrl,
           imageUrl: publicUrl,
         });
+        if (onSaveTopology) {
+          onSaveTopology();
+        }
       } catch (err) {
         console.error('Erro ao enviar imagem ao Supabase Storage:', err);
         const reader = new FileReader();
@@ -110,6 +113,9 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
               customImageUrl: url,
               imageUrl: url,
             });
+            if (onSaveTopology) {
+              onSaveTopology();
+            }
           }
         };
         reader.readAsDataURL(file);
