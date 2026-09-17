@@ -35,6 +35,7 @@ import {
   FileText
 } from 'lucide-react';
 import { NetworkNode, NetworkFolder } from '../../../types/network';
+import { NewPassiveModal } from './NewPassiveModal';
 
 interface RackElevationModalProps {
   rackNode: NetworkNode | null;
@@ -76,6 +77,45 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragOverU, setDragOverU] = useState<number | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+
+  // New Passive Modal State
+  const [isNewPassiveModalOpen, setIsNewPassiveModalOpen] = useState(false);
+  const [passiveTargetSlotU, setPassiveTargetSlotU] = useState<number | undefined>(undefined);
+
+  const handleOpenAddPassive = (slotU?: number) => {
+    setPassiveTargetSlotU(slotU || 42);
+    setIsNewPassiveModalOpen(true);
+  };
+
+  const handleAddPassiveNode = (passiveNode: Partial<NetworkNode>) => {
+    const fullNode: NetworkNode = {
+      id: passiveNode.id || `passive-${Date.now()}`,
+      name: passiveNode.name || 'Elemento Passivo',
+      type: passiveNode.type || 'front_panel_blank',
+      category: 'passive',
+      vendor: passiveNode.vendor || 'Genérico',
+      model: passiveNode.model || 'Passivo',
+      folderId: rackNode.folderId,
+      location: `${rackNode.name} (${passiveNode.rackPosition || 'U1'})`,
+      parentRackId: rackNode.id,
+      rackPosition: passiveNode.rackPosition || 'U1',
+      rackUnits: passiveNode.rackUnits || 1,
+      isPassive: true,
+      powerConsumptionWatts: 0,
+      powerSupply: 'none',
+      status: 'online',
+      ports: passiveNode.ports || [],
+      notes: passiveNode.notes || '',
+      customImageUrl: passiveNode.customImageUrl,
+      imageUrl: passiveNode.imageUrl,
+      colorScheme: passiveNode.colorScheme,
+      createdAt: new Date().toISOString(),
+      ...(passiveNode as any),
+    };
+
+    onUpdateNode(fullNode);
+    setSelectedInspectNodeId(fullNode.id);
+  };
 
   const handleSaveAndClose = () => {
     setIsSaved(true);
@@ -265,12 +305,22 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
               <button
                 type="button"
                 onClick={() => onAddNewAssetToSlot(slots[0] || 42)}
-                className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 + Novo Ativo no Rack
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => handleOpenAddPassive(slots[0] || 42)}
+              className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/20 transition-all cursor-pointer active:scale-95"
+              title="Adicionar ou selecionar elemento passivo (DIO, Frente Falsa, Guia de Cabos, Patch Panel)"
+            >
+              <Layers className="w-4 h-4" />
+              + Novo Passivo
+            </button>
 
             <button
               type="button"
@@ -527,15 +577,31 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                               </div>
 
                               {/* Realistic Faceplate Details */}
-                              <div className="flex-1 flex items-center justify-between gap-2 overflow-hidden bg-black/40 rounded-lg p-1.5 border border-slate-800/80 group-hover/slot:border-orange-500/50 transition-colors">
+                              <div className={`flex-1 flex items-center justify-between gap-2 overflow-hidden rounded-lg p-1.5 border transition-colors ${
+                                nodeAtU.isPassive || nodeAtU.category === 'passive'
+                                  ? 'bg-slate-950/80 border-sky-800/60 group-hover/slot:border-sky-500'
+                                  : 'bg-black/40 border-slate-800/80 group-hover/slot:border-orange-500/50'
+                              }`}>
                                 <div className="flex items-center gap-2 overflow-hidden">
                                   {/* Equipment Type Icon */}
-                                  <div className="w-6 h-6 rounded bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
-                                    {nodeAtU.type.includes('server') ? <Server className="w-3.5 h-3.5 text-purple-400" /> :
-                                     nodeAtU.type.includes('router') ? <Router className="w-3.5 h-3.5 text-orange-400" /> :
-                                     nodeAtU.type.includes('olt') ? <Zap className="w-3.5 h-3.5 text-blue-400" /> :
-                                     nodeAtU.type.includes('switch') ? <Network className="w-3.5 h-3.5 text-indigo-400" /> :
-                                     <HardDrive className="w-3.5 h-3.5 text-emerald-400" />}
+                                  <div className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 ${
+                                    nodeAtU.isPassive || nodeAtU.category === 'passive'
+                                      ? 'bg-sky-950/60 border-sky-800 text-sky-400'
+                                      : 'bg-slate-800 border-slate-700'
+                                  }`}>
+                                    {nodeAtU.isPassive || nodeAtU.category === 'passive' ? (
+                                      <Layers className="w-3.5 h-3.5 text-sky-400" />
+                                    ) : nodeAtU.type.includes('server') ? (
+                                      <Server className="w-3.5 h-3.5 text-purple-400" />
+                                    ) : nodeAtU.type.includes('router') ? (
+                                      <Router className="w-3.5 h-3.5 text-orange-400" />
+                                    ) : nodeAtU.type.includes('olt') ? (
+                                      <Zap className="w-3.5 h-3.5 text-blue-400" />
+                                    ) : nodeAtU.type.includes('switch') ? (
+                                      <Network className="w-3.5 h-3.5 text-indigo-400" />
+                                    ) : (
+                                      <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+                                    )}
                                   </div>
 
                                   <div className="overflow-hidden">
@@ -546,6 +612,11 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                                       <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-slate-800 text-slate-300">
                                         {nodeAtU.model}
                                       </span>
+                                      {(nodeAtU.isPassive || nodeAtU.category === 'passive') && (
+                                        <span className="text-[9px] font-bold px-1 rounded bg-sky-950 text-sky-300 border border-sky-800">
+                                          PASSIVO
+                                        </span>
+                                      )}
                                       {nodeAtU.rackUnits && nodeAtU.rackUnits > 1 && (
                                         <span className="text-[9px] font-bold px-1 rounded bg-orange-950 text-orange-400 border border-orange-800">
                                           {nodeAtU.rackUnits}U
@@ -553,23 +624,42 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                                       )}
                                     </div>
                                     <div className="text-[9px] text-slate-400 font-mono flex items-center gap-2">
-                                      <span>IP: {nodeAtU.managementIp || nodeAtU.ip}</span>
-                                      <span>• {nodeAtU.ports.length} Portas</span>
-                                      <span>• {nodeAtU.powerConsumptionWatts || 35}W</span>
+                                      {nodeAtU.isPassive || nodeAtU.category === 'passive' ? (
+                                        <>
+                                          <span className="text-sky-400 font-semibold">Elemento Passivo</span>
+                                          <span>• {nodeAtU.ports.length} Acopladores/Portas</span>
+                                          <span>• 0 Watts</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>IP: {nodeAtU.managementIp || nodeAtU.ip || 'S/ IP'}</span>
+                                          <span>• {nodeAtU.ports.length} Portas</span>
+                                          <span>• {nodeAtU.powerConsumptionWatts || 35}W</span>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
 
                                 {/* Lucidchart-style Realistic Honeycomb Mesh / Port Indicators */}
                                 <div className="hidden md:flex items-center gap-1 bg-slate-900/80 px-2 py-1 rounded border border-slate-800 shrink-0">
-                                  {/* Simulated Port Activity LEDs */}
-                                  <div className="flex gap-0.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                  </div>
-                                  <span className="text-[8px] font-mono text-slate-500 uppercase font-bold">10G/1G</span>
+                                  {nodeAtU.isPassive || nodeAtU.category === 'passive' ? (
+                                    <div className="flex items-center gap-1">
+                                      <Cable className="w-3 h-3 text-sky-400" />
+                                      <span className="text-[8px] font-mono text-sky-400/80 uppercase font-bold">PASSIVO</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {/* Simulated Port Activity LEDs */}
+                                      <div className="flex gap-0.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                      </div>
+                                      <span className="text-[8px] font-mono text-slate-500 uppercase font-bold">10G/1G</span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
 
@@ -590,7 +680,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                                   handleOpenEditAsset(nodeAtU);
                                 }}
                                 className="p-1.5 rounded-lg bg-orange-600/30 hover:bg-orange-600 text-orange-300 hover:text-white border border-orange-500/40 transition-colors cursor-pointer"
-                                title="Ver Informações e Editar este Ativo"
+                                title="Ver Informações e Editar este Item"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -602,7 +692,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                                   handleUnmountDevice(nodeAtU.id);
                                 }}
                                 className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 transition-colors cursor-pointer"
-                                title="Desinstalar este Ativo do Rack"
+                                title="Desinstalar este Item do Rack"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -624,7 +714,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                               {onAddNewAssetToSlot && (
                                 <button
                                   type="button"
@@ -633,9 +723,19 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                                   title={`Criar novo ativo para o slot U${u}`}
                                 >
                                   <Plus className="w-3 h-3" />
-                                  + Novo Ativo U{u}
+                                  + Ativo U{u}
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddPassive(u)}
+                                className="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-sky-600 text-slate-400 hover:text-white font-bold text-[10px] flex items-center gap-1 border border-slate-700 hover:border-sky-500 transition-colors cursor-pointer shadow-2xs"
+                                title={`Adicionar passivo (DIO, Frente Falsa, Guia de Cabos) no slot U${u}`}
+                              >
+                                <Layers className="w-3 h-3" />
+                                + Passivo U{u}
+                              </button>
 
                               {deviceToMountId && (
                                 <button
@@ -1184,6 +1284,16 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* NEW PASSIVE MODAL */}
+      <NewPassiveModal
+        isOpen={isNewPassiveModalOpen}
+        rackNode={rackNode}
+        initialSlotU={passiveTargetSlotU}
+        allNodes={allNodes}
+        onClose={() => setIsNewPassiveModalOpen(false)}
+        onAddPassive={handleAddPassiveNode}
+      />
     </div>
   );
 };
