@@ -36,7 +36,7 @@ import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 
 export type Environment = 'colaborador' | 'erp' | 'pdv';
-export type ErpModule = 'dashboard' | 'estoque' | 'rh' | 'rede' | 'vendas' | 'financeiro' | 'relatorios' | 'configuracoes';
+export type ErpModule = 'dashboard' | 'estoque' | 'rh' | 'rede' | 'arquivo' | 'vendas' | 'financeiro' | 'relatorios' | 'configuracoes';
 
 interface AppContextType {
   // Auth & Session

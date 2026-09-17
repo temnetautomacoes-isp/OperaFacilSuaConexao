@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Product, UserAccount, CompanyDivision, EmployeeDocument, TimeClockRecord, FinancialEntry, Supplier } from '../types';
+import { Product, UserAccount, CompanyDivision, EmployeeDocument, TimeClockRecord, FinancialEntry, Supplier, ExplorerFolder, ExplorerFile } from '../types';
 import { TopologyData } from '../types/network';
 
 export interface GondolaCategoryItem {
@@ -652,5 +652,176 @@ export const supabaseService = {
     } catch (err) {
       console.warn('[SupabaseStorage] Erro ao deletar arquivo:', err);
     }
+  },
+
+  // -------------------------------------------------------------
+  // EXPLORADOR DE ARQUIVOS (FILE EXPLORER CLOUD SUPABASE)
+  // -------------------------------------------------------------
+  async fetchExplorerFolders(): Promise<ExplorerFolder[]> {
+    try {
+      const { data, error } = await supabase
+        .from('explorer_folders')
+        .select('*')
+        .order('name', { ascending: true });
+      if (error || !data) return [];
+      return data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        parentId: d.parent_id || null,
+        color: d.color || '#f59e0b',
+        icon: d.icon || 'folder',
+        createdBy: d.created_by || undefined,
+        createdAt: d.created_at,
+        updatedAt: d.updated_at,
+      }));
+    } catch (err) {
+      console.error('[ExplorerFolders] Erro ao carregar pastas:', err);
+      return [];
+    }
+  },
+
+  async saveExplorerFolder(folder: Partial<ExplorerFolder> & { id: string; name: string }): Promise<void> {
+    const payload: any = {
+      id: folder.id,
+      name: folder.name.trim(),
+      parent_id: folder.parentId || null,
+      color: folder.color || '#f59e0b',
+      icon: folder.icon || 'folder',
+      created_by: folder.createdBy || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (folder.createdAt) {
+      payload.created_at = folder.createdAt;
+    }
+    const { error } = await supabase
+      .from('explorer_folders')
+      .upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('[ExplorerFolders] Erro ao salvar pasta:', error);
+      throw error;
+    }
+  },
+
+  async deleteExplorerFolder(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('explorer_folders')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      console.error('[ExplorerFolders] Erro ao excluir pasta:', error);
+      throw error;
+    }
+  },
+
+  async fetchExplorerFiles(folderId?: string | null): Promise<ExplorerFile[]> {
+    try {
+      let query = supabase.from('explorer_files').select('*').order('created_at', { ascending: false });
+      if (folderId !== undefined) {
+        if (folderId === null) {
+          query = query.is('folder_id', null);
+        } else {
+          query = query.eq('folder_id', folderId);
+        }
+      }
+      const { data, error } = await query;
+      if (error || !data) return [];
+      return data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        folderId: d.folder_id || null,
+        fileUrl: d.file_url,
+        storagePath: d.storage_path || undefined,
+        sizeBytes: Number(d.size_bytes || 0),
+        mimeType: d.mime_type || undefined,
+        fileExt: d.file_ext || undefined,
+        createdBy: d.created_by || undefined,
+        createdAt: d.created_at,
+        updatedAt: d.updated_at,
+      }));
+    } catch (err) {
+      console.error('[ExplorerFiles] Erro ao carregar arquivos:', err);
+      return [];
+    }
+  },
+
+  async saveExplorerFile(file: Partial<ExplorerFile> & { id: string; name: string }): Promise<void> {
+    const payload: any = {
+      id: file.id,
+      name: file.name.trim(),
+      updated_at: new Date().toISOString(),
+    };
+    if (file.folderId !== undefined) payload.folder_id = file.folderId;
+    if (file.fileUrl !== undefined) payload.file_url = file.fileUrl;
+    if (file.storagePath !== undefined) payload.storage_path = file.storagePath;
+    if (file.sizeBytes !== undefined) payload.size_bytes = file.sizeBytes;
+    if (file.mimeType !== undefined) payload.mime_type = file.mimeType;
+    if (file.fileExt !== undefined) payload.file_ext = file.fileExt;
+    if (file.createdBy !== undefined) payload.created_by = file.createdBy;
+    if (file.createdAt !== undefined) payload.created_at = file.createdAt;
+
+    const { error } = await supabase
+      .from('explorer_files')
+      .upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('[ExplorerFiles] Erro ao salvar arquivo:', error);
+      throw error;
+    }
+  },
+
+  async deleteExplorerFile(id: string, storagePath?: string): Promise<void> {
+    const { error } = await supabase
+      .from('explorer_files')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      console.error('[ExplorerFiles] Erro ao excluir arquivo:', error);
+      throw error;
+    }
+    if (storagePath) {
+      await this.deleteFile(storagePath);
+    }
+  },
+
+  async uploadExplorerFileBlob(
+    file: File,
+    folderId: string | null,
+    userName?: string
+  ): Promise<ExplorerFile> {
+    const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : '';
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `explorer/${folderId || 'root'}/${Date.now()}_${cleanFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('operafacil-media')
+      .upload(storagePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[ExplorerUpload] Erro no upload para storage:', uploadError);
+      throw uploadError;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('operafacil-media')
+      .getPublicUrl(storagePath);
+
+    const newFile: ExplorerFile = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: file.name,
+      folderId: folderId || null,
+      fileUrl: urlData.publicUrl,
+      storagePath,
+      sizeBytes: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      fileExt: ext,
+      createdBy: userName || 'Usuário',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveExplorerFile(newFile);
+    return newFile;
   },
 };

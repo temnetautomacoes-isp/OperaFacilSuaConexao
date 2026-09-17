@@ -173,12 +173,38 @@ export interface UserPermissions {
   canAccessEstoque: boolean;
   canAccessRh?: boolean;
   canAccessRede?: boolean;
+  canAccessArquivo?: boolean;
   canAccessPrevencaoPerdas?: boolean;
   canAccessVendas?: boolean;
   canAccessFinanceiro: boolean;
   canAccessRelatorios: boolean;
   canAccessConfiguracoes: boolean;
   canAccessColaborador?: boolean;
+}
+
+export interface ExplorerFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  color?: string;
+  icon?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExplorerFile {
+  id: string;
+  name: string;
+  folderId: string | null;
+  fileUrl: string;
+  storagePath?: string;
+  sizeBytes: number;
+  mimeType?: string;
+  fileExt?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type DocumentCategory = 

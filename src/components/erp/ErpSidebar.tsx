@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Users,
   Network,
+  FolderOpen,
   ChevronLeft,
   ChevronRight,
   X,
@@ -74,6 +75,12 @@ export const ErpSidebar: React.FC = () => {
       label: 'Rede', 
       icon: <Network className="w-5 h-5 shrink-0" />, 
       allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessRede !== false,
+    },
+    { 
+      id: 'arquivo' as const, 
+      label: 'Arquivo', 
+      icon: <FolderOpen className="w-5 h-5 shrink-0" />, 
+      allowed: currentUser?.role === 'superadmin' || currentUser?.permissions?.canAccessArquivo !== false,
     },
     { 
       id: 'configuracoes' as const, 
