@@ -22,6 +22,7 @@ import {
   Database,
   Eye,
   EyeOff,
+  Loader2,
   ShoppingBag,
   Package,
   Receipt,
@@ -62,10 +63,12 @@ export const ConfiguracoesModule: React.FC = () => {
   const [address, setAddress] = useState(settings.address);
   const [receiptFooter, setReceiptFooter] = useState(settings.receiptFooter);
   const [logoUrl, setLogoUrl] = useState<string>(settings.logoUrl || '');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sincroniza campos do formulário quando as configurações forem carregadas da nuvem
   useEffect(() => {
+    if (isUploadingLogo) return;
     setName(settings.name || '');
     setSlogan(settings.slogan || '');
     setCnpj(settings.cnpj || '');
@@ -73,7 +76,7 @@ export const ConfiguracoesModule: React.FC = () => {
     setAddress(settings.address || '');
     setReceiptFooter(settings.receiptFooter || '');
     setLogoUrl(settings.logoUrl || '');
-  }, [settings]);
+  }, [settings, isUploadingLogo]);
 
   // User Management state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -108,27 +111,41 @@ export const ConfiguracoesModule: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Por favor, selecione um arquivo de imagem válido (PNG, JPG, SVG).');
+      alert('Por favor, selecione um arquivo de imagem válido (PNG, JPG, SVG, WebP).');
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('A imagem da logo deve ter no máximo 2MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('A imagem da logo deve ter no máximo 5MB.');
       return;
     }
 
+    setIsUploadingLogo(true);
     try {
-      const publicUrl = await supabaseService.uploadFile(file, 'general');
+      // 1. Faz o upload direto para o bucket operafacil-media no Supabase Storage
+      const cleanName = `logo_${Date.now()}`;
+      const publicUrl = await supabaseService.uploadFile(file, 'general', cleanName);
+      
+      // 2. Atualiza imediatamente o estado visual local
       setLogoUrl(publicUrl);
+      
+      // 3. Grava imediatamente no banco Supabase e sincroniza no AppContext
+      updateSettings({ logoUrl: publicUrl });
+      showNotification('Logotipo da empresa atualizado e salvo na nuvem com sucesso!');
     } catch (uploadErr) {
       console.warn('Falha no upload para o Supabase Storage, utilizando fallback local base64:', uploadErr);
       const reader = new FileReader();
       reader.onload = (event) => {
         if (typeof event.target?.result === 'string') {
-          setLogoUrl(event.target.result);
+          const b64 = event.target.result;
+          setLogoUrl(b64);
+          updateSettings({ logoUrl: b64 });
         }
       };
       reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -156,6 +173,8 @@ export const ConfiguracoesModule: React.FC = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    updateSettings({ logoUrl: '' });
+    showNotification('Logotipo da empresa removido com sucesso.');
   };
 
   const handleSaveStoreInfo = (e: React.FormEvent) => {
@@ -454,11 +473,21 @@ export const ConfiguracoesModule: React.FC = () => {
                   />
                   <button
                     type="button"
+                    disabled={isUploadingLogo}
                     onClick={() => fileInputRef.current?.click()}
-                    className="py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    className="py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    <Upload className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{logoUrl ? 'Alterar Imagem da Logo' : 'Adicionar Imagem da Logo'}</span>
+                    {isUploadingLogo ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 text-orange-500 animate-spin" />
+                        <span>Enviando Logo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5 text-orange-500" />
+                        <span>{logoUrl ? 'Alterar Imagem da Logo' : 'Adicionar Imagem da Logo'}</span>
+                      </>
+                    )}
                   </button>
 
                   {logoUrl && (

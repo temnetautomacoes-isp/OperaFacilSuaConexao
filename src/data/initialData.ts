@@ -85,7 +85,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   phone: '(11) 3456-7890',
   address: 'RUA DOUTOR RENATO VASCONCELOS BITTENCOURT - 169 - ALAGOINHAS - BA',
   receiptFooter: 'TemNet, a sua conexão completa.',
-  logoUrl: 'https://ajeakvcgzcmpifnwhenl.supabase.co/storage/v1/object/public/operafacil-media/company/logo_temnet.png',
+  logoUrl: '',
 };
 
 // Histórico de pontos mockados para o mês atual
