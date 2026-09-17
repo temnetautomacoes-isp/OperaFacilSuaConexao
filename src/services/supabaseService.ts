@@ -450,6 +450,7 @@ export const supabaseService = {
       folders: Array.isArray(data.folders) ? data.folders : [],
       nodes: Array.isArray(data.nodes) ? data.nodes : [],
       links: Array.isArray(data.links) ? data.links : [],
+      shapes: Array.isArray(data.shapes) ? data.shapes : [],
     };
   },
 
@@ -461,6 +462,7 @@ export const supabaseService = {
       folders: topo.folders || [],
       nodes: topo.nodes || [],
       links: topo.links || [],
+      shapes: topo.shapes || [],
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
 

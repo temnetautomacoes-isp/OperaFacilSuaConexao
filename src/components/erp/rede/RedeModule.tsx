@@ -102,20 +102,36 @@ export const RedeModule: React.FC = () => {
     async function loadCloudTopology() {
       try {
         const cloudTopo = await supabaseService.fetchNetworkTopology();
-        if (cloudTopo && (cloudTopo.folders.length > 0 || cloudTopo.nodes.length > 0 || cloudTopo.links.length > 0)) {
+        if (cloudTopo && (cloudTopo.folders.length > 0 || cloudTopo.nodes.length > 0 || cloudTopo.links.length > 0 || (cloudTopo.shapes && cloudTopo.shapes.length > 0))) {
           if (!isMockData(cloudTopo)) {
             setFolders(cloudTopo.folders || []);
             setNodes(cloudTopo.nodes || []);
             setLinks(cloudTopo.links || []);
-            if ((cloudTopo as any).shapes) setShapes((cloudTopo as any).shapes || []);
-            localStorage.setItem('operafacil_network_topology', JSON.stringify(cloudTopo));
+
+            // Preserve local shapes if cloud shapes was empty
+            const saved = localStorage.getItem('operafacil_network_topology');
+            let localShapes: CanvasShape[] = [];
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed.shapes)) localShapes = parsed.shapes;
+              } catch {}
+            }
+            const shapesToUse = (cloudTopo.shapes && cloudTopo.shapes.length > 0) ? cloudTopo.shapes : localShapes;
+            setShapes(shapesToUse);
+
+            const mergedTopo = { ...cloudTopo, shapes: shapesToUse };
+            localStorage.setItem('operafacil_network_topology', JSON.stringify(mergedTopo));
+            if ((!cloudTopo.shapes || cloudTopo.shapes.length === 0) && shapesToUse.length > 0) {
+              supabaseService.saveNetworkTopology(mergedTopo).catch(console.error);
+            }
           }
         } else {
           // If cloud is empty but local has valid user data, sync local to cloud
           const saved = localStorage.getItem('operafacil_network_topology');
           if (saved) {
             const parsed = JSON.parse(saved);
-            if (!isMockData(parsed) && (parsed.folders?.length > 0 || parsed.nodes?.length > 0)) {
+            if (!isMockData(parsed) && (parsed.folders?.length > 0 || parsed.nodes?.length > 0 || parsed.shapes?.length > 0)) {
               supabaseService.saveNetworkTopology(parsed).catch(console.error);
             }
           }
@@ -136,7 +152,7 @@ export const RedeModule: React.FC = () => {
           setFolders(fresh.folders || []);
           setNodes(fresh.nodes || []);
           setLinks(fresh.links || []);
-          if ((fresh as any).shapes) setShapes((fresh as any).shapes || []);
+          if (fresh.shapes) setShapes(fresh.shapes);
           localStorage.setItem('operafacil_network_topology', JSON.stringify(fresh));
         }
       })
