@@ -545,7 +545,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               </div>
 
               {/* Node Name & Subtitle Badge */}
-              <div className="mt-1.5 flex flex-col items-center max-w-[110px] pointer-events-none">
+              <div className="mt-1.5 flex flex-col items-center min-w-[130px] max-w-[160px] pointer-events-none">
                 <span
                   className={`text-[11px] font-bold text-center leading-tight px-1.5 py-0.5 rounded-md transition-colors line-clamp-2 ${
                     isSelected
@@ -567,9 +567,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   </span>
                 ) : null}
 
-                {(node.managementIp || node.ip || node.hostname) && (
-                  <span className="text-[9px] text-slate-400 font-mono mt-0.5 truncate max-w-[100px]">
-                    {node.managementIp || node.ip || node.hostname}
+                {(node.ip || node.managementIp || node.hostname) && (
+                  <span className="text-[9.5px] text-slate-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-800 shadow-xs max-w-[150px] truncate text-center">
+                    {node.ip || node.managementIp || node.hostname}
                   </span>
                 )}
               </div>

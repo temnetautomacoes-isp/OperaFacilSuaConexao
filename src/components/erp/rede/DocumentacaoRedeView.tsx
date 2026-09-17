@@ -371,7 +371,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                               {node.rackUnits || 1}U {node.rackPosition ? `(${node.rackPosition})` : ''}
                             </span>
                           </td>
-                          <td className="p-3 font-mono font-bold text-blue-600">{node.managementIp || node.ip}</td>
+                          <td className="p-3 font-mono font-bold text-blue-600">{node.ip || node.managementIp || '---'}</td>
                           <td className="p-3">
                             <div className="flex flex-wrap gap-1 max-w-xs">
                               {Object.entries(portCounts).map(([spd, count]) => (
@@ -463,6 +463,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onOpenCli={onOpenCli}
           onOpenRackElevation={setRackElevationModalNode}
           onAddAssetToRack={handleOpenAddAssetToRack}
+          onSaveTopology={onSaveTopology}
           onClose={() => {
             onSelectNode(null);
             onSelectLink(null);

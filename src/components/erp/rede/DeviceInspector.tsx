@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Trash2, 
@@ -15,7 +15,9 @@ import {
   Plus,
   Image as ImageIcon,
   Upload,
-  Link2
+  Link2,
+  Save,
+  CheckCircle2
 } from 'lucide-react';
 import { NetworkNode, NetworkLink, NetworkFolder } from '../../../types/network';
 
@@ -32,6 +34,7 @@ interface DeviceInspectorProps {
   onOpenRackElevation?: (rackNode: NetworkNode) => void;
   onAddAssetToRack?: (rackNode: NetworkNode) => void;
   onClose: () => void;
+  onSaveTopology?: () => void;
 }
 
 export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
@@ -47,7 +50,24 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
   onOpenRackElevation,
   onAddAssetToRack,
   onClose,
+  onSaveTopology,
 }) => {
+  const [isSavedToast, setIsSavedToast] = useState(false);
+
+  const handleSaveDevice = () => {
+    if (selectedNode) {
+      onUpdateNode({
+        ...selectedNode,
+        ip: selectedNode.ip || selectedNode.managementIp || '',
+        managementIp: selectedNode.ip || selectedNode.managementIp || '',
+      });
+      if (onSaveTopology) {
+        onSaveTopology();
+      }
+      setIsSavedToast(true);
+      setTimeout(() => setIsSavedToast(false), 2500);
+    }
+  };
   if (!selectedNode && !selectedLink) return null;
 
   const isRack = selectedNode && (selectedNode.type === 'rack_floor' || selectedNode.type === 'rack_wall' || selectedNode.type === 'rack_19');
@@ -135,6 +155,29 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
               </div>
             </div>
 
+            {/* Save Changes Button Top */}
+            <button
+              type="button"
+              onClick={handleSaveDevice}
+              className={`w-full py-2 px-3.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                isSavedToast
+                  ? 'bg-emerald-600 text-white shadow-emerald-500/40 ring-2 ring-emerald-400'
+                  : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-500/25'
+              }`}
+            >
+              {isSavedToast ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                  <span>Alterações Salvas com Sucesso!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 text-white" />
+                  <span>Salvar Alterações</span>
+                </>
+              )}
+            </button>
+
             {/* PNG Image Management */}
             <div className="p-3 bg-orange-50/60 rounded-xl border border-orange-200/80 space-y-2">
               <div className="flex items-center justify-between">
@@ -159,7 +202,7 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                   Trocar Imagem PNG...
                   <input
                     type="file"
-                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                    accept="image/*"
                     onChange={handleImageFileUpload}
                     className="hidden"
                   />
@@ -167,12 +210,12 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
               </div>
             </div>
 
-            {/* Quick Actions (CLI Button) */}
+            {/* Quick Actions */}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => onOpenCli(selectedNode)}
-                className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
               >
                 <Terminal className="w-3.5 h-3.5 text-orange-400" />
                 Abrir Terminal CLI
@@ -180,7 +223,7 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
             </div>
 
             {/* General Properties */}
-            <div className="space-y-3">
+            <div className="space-y-3 pt-1">
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                   Pasta / POP Pertencente (SGP TSMX)
@@ -188,13 +231,11 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                 <select
                   value={selectedNode.folderId || ''}
                   onChange={(e) => onUpdateNode({ ...selectedNode, folderId: e.target.value || undefined })}
-                  className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-orange-200 bg-orange-50/40 text-orange-950 focus:bg-white focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                  className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 cursor-pointer"
                 >
-                  <option value="">Sem Pasta (Raiz Geral)</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      📁 {f.parentId ? '   └── ' : ''}{f.name}
-                    </option>
+                  <option value="">Sem Pasta (Raiz)</option>
+                  {folders.map(f => (
+                    <option key={f.id} value={f.id}>📁 {f.name}</option>
                   ))}
                 </select>
               </div>
@@ -242,12 +283,13 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                  Endereço IP Principal
+                  Endereço IP
                 </label>
                 <input
                   type="text"
-                  value={selectedNode.ip}
-                  onChange={(e) => onUpdateNode({ ...selectedNode, ip: e.target.value })}
+                  value={selectedNode.ip || selectedNode.managementIp || ''}
+                  onChange={(e) => onUpdateNode({ ...selectedNode, ip: e.target.value, managementIp: e.target.value })}
+                  placeholder="Ex: 192.168.1.1 ou 177.131.104.189:9000"
                   className="w-full px-3 py-1.5 text-xs font-mono text-blue-600 font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
                 />
               </div>
@@ -553,8 +595,30 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
               </div>
             </div>
 
-            {/* Delete Node */}
-            <div className="pt-3 border-t border-slate-100">
+            {/* Bottom Actions: Save and Delete */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={handleSaveDevice}
+                className={`w-full py-2.5 px-3.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  isSavedToast
+                    ? 'bg-emerald-600 text-white shadow-emerald-500/40 ring-2 ring-emerald-400'
+                    : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-500/25'
+                }`}
+              >
+                {isSavedToast ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    <span>Alterações Salvas com Sucesso!</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 text-white" />
+                    <span>Salvar Alterações</span>
+                  </>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => onDeleteNode(selectedNode.id)}

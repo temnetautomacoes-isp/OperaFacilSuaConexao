@@ -292,6 +292,7 @@ export const OficinaTestesView: React.FC<OficinaTestesViewProps> = ({
           onDeleteNode={onDeleteNode}
           onUpdateLink={onUpdateLink}
           onDeleteLink={onDeleteLink}
+          onSaveTopology={onSaveTopology}
           onOpenCli={(node) => {
             onSelectNode(node.id);
             setIsPacketTracerModalOpen(true);

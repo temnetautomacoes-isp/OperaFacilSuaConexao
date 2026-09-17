@@ -406,7 +406,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                             <span className={`text-[9px] font-mono shrink-0 ${
                               isAssetSelected ? 'text-orange-100' : 'text-slate-400'
                             }`}>
-                              {asset.managementIp || asset.ip}
+                              {asset.ip || asset.managementIp}
                             </span>
                           </div>
                         );
@@ -444,7 +444,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                   <span className={`text-[9px] font-mono shrink-0 ${
                     isNodeSelected ? 'text-orange-200' : 'text-slate-400'
                   }`}>
-                    {node.ip}
+                    {node.ip || node.managementIp}
                   </span>
                 </div>
               );
