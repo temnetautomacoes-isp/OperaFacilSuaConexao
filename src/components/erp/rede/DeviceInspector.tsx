@@ -658,7 +658,22 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                 placeholder="Ex: Tronco 10G / PTT"
                 className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white"
               />
-              <label className="flex items-center gap-2 cursor-pointer mt-2 select-none">
+            </div>
+
+            {/* Checkbox para Habilitar / Desabilitar Texto da Linha no Mapa */}
+            <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 transition-colors">
+              <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedLink.style?.showLabel !== false ? 'bg-orange-500' : 'bg-slate-400'}`} />
+                  <div>
+                    <span className="block text-xs font-bold text-slate-800">
+                      Exibir Texto no Mapa
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      Habilita ou desabilita a caixinha com o texto/etiqueta na linha
+                    </span>
+                  </div>
+                </div>
                 <input
                   type="checkbox"
                   checked={selectedLink.style?.showLabel !== false}
@@ -671,11 +686,8 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                       }
                     });
                   }}
-                  className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-400 bg-slate-100 border-slate-300 accent-orange-500 cursor-pointer"
+                  className="w-4 h-4 rounded text-orange-500 focus:ring-orange-400 bg-white border-slate-300 accent-orange-500 cursor-pointer"
                 />
-                <span className="text-[11px] font-semibold text-slate-700">
-                  Exibir texto/etiqueta na linha
-                </span>
               </label>
             </div>
 
