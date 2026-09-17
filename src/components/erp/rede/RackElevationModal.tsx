@@ -873,8 +873,14 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">IP GERÊNCIA:</span>
-                      <span className="font-bold text-blue-400">{inspectedNode.managementIp || inspectedNode.ip}</span>
+                      <span className="font-bold text-blue-400">{inspectedNode.ip || inspectedNode.managementIp || '---'}</span>
                     </div>
+                    {inspectedNode.mac && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">ENDEREÇO MAC:</span>
+                        <span className="font-bold text-purple-400 font-mono">{inspectedNode.mac}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-slate-500">PORTAS:</span>
                       <span className="font-bold text-cyan-400">{inspectedNode.ports.length} Interfaces</span>
@@ -1141,17 +1147,32 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                     Rede, Slot no Rack & Energia
                   </span>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      Endereço IP (Gerência / Loopback):
-                    </label>
-                    <input
-                      type="text"
-                      value={editFormData.managementIp || editFormData.ip || ''}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, managementIp: e.target.value, ip: e.target.value }))}
-                      className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 font-mono font-bold text-xs focus:border-orange-500 focus:outline-hidden"
-                      placeholder="Ex: 192.168.1.1"
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Endereço IP (Gerência):
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.managementIp || editFormData.ip || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, managementIp: e.target.value, ip: e.target.value }))}
+                        className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 font-mono font-bold text-xs focus:border-orange-500 focus:outline-hidden"
+                        placeholder="Ex: 192.168.1.1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Endereço MAC:
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.mac || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, mac: e.target.value.toUpperCase() }))}
+                        className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-purple-400 font-mono font-bold text-xs focus:border-orange-500 focus:outline-hidden"
+                        placeholder="Ex: AA:BB:CC:DD:EE:FF"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">

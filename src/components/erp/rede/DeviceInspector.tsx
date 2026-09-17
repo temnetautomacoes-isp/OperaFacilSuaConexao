@@ -294,6 +294,19 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  Endereço MAC
+                </label>
+                <input
+                  type="text"
+                  value={selectedNode.mac || ''}
+                  onChange={(e) => onUpdateNode({ ...selectedNode, mac: e.target.value.toUpperCase() })}
+                  placeholder="Ex: CC:2D:E0:44:89:1F"
+                  className="w-full px-3 py-1.5 text-xs font-mono text-purple-600 font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">

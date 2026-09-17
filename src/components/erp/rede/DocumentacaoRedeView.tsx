@@ -371,7 +371,10 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                               {node.rackUnits || 1}U {node.rackPosition ? `(${node.rackPosition})` : ''}
                             </span>
                           </td>
-                          <td className="p-3 font-mono font-bold text-blue-600">{node.ip || node.managementIp || '---'}</td>
+                          <td className="p-3 font-mono">
+                            <div className="font-bold text-blue-600">{node.ip || node.managementIp || '---'}</div>
+                            {node.mac && <div className="text-[10px] text-purple-600 font-semibold">{node.mac}</div>}
+                          </td>
                           <td className="p-3">
                             <div className="flex flex-wrap gap-1 max-w-xs">
                               {Object.entries(portCounts).map(([spd, count]) => (

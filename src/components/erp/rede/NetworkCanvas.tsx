@@ -572,6 +572,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                     {node.ip || node.managementIp || node.hostname}
                   </span>
                 )}
+
+                {node.mac && (
+                  <span className="text-[8.5px] text-purple-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800/60 shadow-xs max-w-[150px] truncate text-center" title={`MAC: ${node.mac}`}>
+                    {node.mac}
+                  </span>
+                )}
               </div>
             </div>
           );

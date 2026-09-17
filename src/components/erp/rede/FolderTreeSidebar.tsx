@@ -403,11 +403,20 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                               </span>
                             </div>
 
-                            <span className={`text-[9px] font-mono shrink-0 ${
-                              isAssetSelected ? 'text-orange-100' : 'text-slate-400'
-                            }`}>
-                              {asset.ip || asset.managementIp}
-                            </span>
+                            <div className="flex flex-col items-end shrink-0 text-right">
+                              <span className={`text-[9px] font-mono leading-none ${
+                                isAssetSelected ? 'text-orange-100 font-bold' : 'text-slate-500 font-bold'
+                              }`}>
+                                {asset.ip || asset.managementIp}
+                              </span>
+                              {asset.mac && (
+                                <span className={`text-[8px] font-mono leading-none mt-0.5 ${
+                                  isAssetSelected ? 'text-orange-200' : 'text-purple-600 font-semibold'
+                                }`}>
+                                  {asset.mac}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -441,11 +450,20 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                     <span className="truncate text-[11px] font-medium">{node.name}</span>
                   </div>
 
-                  <span className={`text-[9px] font-mono shrink-0 ${
-                    isNodeSelected ? 'text-orange-200' : 'text-slate-400'
-                  }`}>
-                    {node.ip || node.managementIp}
-                  </span>
+                  <div className="flex flex-col items-end shrink-0 text-right">
+                    <span className={`text-[9px] font-mono leading-none ${
+                      isNodeSelected ? 'text-orange-200 font-bold' : 'text-slate-500 font-bold'
+                    }`}>
+                      {node.ip || node.managementIp}
+                    </span>
+                    {node.mac && (
+                      <span className={`text-[8px] font-mono leading-none mt-0.5 ${
+                        isNodeSelected ? 'text-orange-200' : 'text-purple-600 font-semibold'
+                      }`}>
+                        {node.mac}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}
