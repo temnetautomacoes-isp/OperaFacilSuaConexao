@@ -238,6 +238,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
+  // Handle Canvas Mouse Up
+  const handleMouseUp = () => {
+    setIsPanning(false);
+    setDraggingNodeId(null);
+  };
+
   // Start Cable Drag from Connector Dot
   const handleStartCableDrag = (e: React.MouseEvent, nodeId: string, side: 'right' | 'left' = 'right') => {
     e.stopPropagation();
