@@ -187,6 +187,7 @@ export interface CanvasShape {
   textColor?: string;
   fontSize?: number;
   rotation?: number; // Ângulo em graus (0-360)
+  isLocked?: boolean; // Bloquear posição e tamanho da forma no mapa
 }
 
 export interface TopologyData {

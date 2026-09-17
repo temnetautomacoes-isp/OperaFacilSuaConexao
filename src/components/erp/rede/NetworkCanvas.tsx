@@ -27,6 +27,8 @@ import {
   RotateCcw,
   RotateCw,
   Maximize2,
+  Lock,
+  Unlock,
   Trash2,
   Edit3,
   Check,
@@ -508,6 +510,19 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   // Start Shape Move (Click border or body)
   const handleStartShapeMove = (e: React.MouseEvent, shape: CanvasShape) => {
     if (isDrawingPathMode) return;
+
+    // Se o cadeado estiver trancado, o item fica fixado e não se move (permite arrastar o canvas normalmente)
+    if (shape.isLocked) {
+      if (e.button === 0 || e.button === 1) {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+        setSelectedShapeId(shape.id);
+        onSelectNode(null);
+        onSelectLink(null);
+      }
+      return;
+    }
+
     e.stopPropagation();
     setSelectedShapeId(shape.id);
     onSelectNode(null);
@@ -529,7 +544,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Start Shape Resize (Corner Handle)
   const handleStartShapeResize = (e: React.MouseEvent, shape: CanvasShape) => {
-    if (isDrawingPathMode) return;
+    if (isDrawingPathMode || shape.isLocked) return;
     e.stopPropagation();
     setSelectedShapeId(shape.id);
     setTransformingShapeId(shape.id);
@@ -556,7 +571,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Start Shape Rotate & Scale (Top Rotation Handle)
   const handleStartShapeRotateScale = (e: React.MouseEvent, shape: CanvasShape) => {
-    if (isDrawingPathMode) return;
+    if (isDrawingPathMode || shape.isLocked) return;
     e.stopPropagation();
     setSelectedShapeId(shape.id);
     setTransformingShapeId(shape.id);
@@ -869,7 +884,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 transformOrigin: 'center center',
               }}
               className={`absolute pointer-events-auto rounded-2xl p-3 flex flex-col justify-between group transition-shadow select-none ${
-                isDrawingPathMode ? 'pointer-events-none' : 'cursor-grab active:cursor-grabbing'
+                isDrawingPathMode ? 'pointer-events-none' : shape.isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
               } ${
                 shape.type === 'circle' ? 'rounded-full text-center flex items-center justify-center' : ''
               } ${
@@ -878,8 +893,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 isSelected ? 'ring-2 ring-amber-400 shadow-2xl' : 'hover:ring-1 hover:ring-amber-300/70'
               }`}
             >
-              {/* Top Rotate & Scale Handle Stem and Button (Girar e Aumentar Tamanho) */}
-              {!isDrawingPathMode && (
+              {/* Top Rotate & Scale Handle Stem and Button (Girar e Aumentar Tamanho) - oculto se bloqueado */}
+              {!isDrawingPathMode && !shape.isLocked && (
                 <div 
                   className={`absolute -top-11 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-30 transition-opacity duration-150 ${
                     isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -903,8 +918,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 </div>
               )}
 
-              {/* Bottom-Right Corner Resize Handle */}
-              {!isDrawingPathMode && (
+              {/* Bottom-Right Corner Resize Handle - oculto se bloqueado */}
+              {!isDrawingPathMode && !shape.isLocked && (
                 <div
                   onMouseDown={(e) => handleStartShapeResize(e, shape)}
                   className={`absolute -bottom-2 -right-2 w-5 h-5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full flex items-center justify-center cursor-nwse-resize ring-2 ring-white shadow-xl z-30 transition-all hover:scale-125 ${
@@ -918,12 +933,39 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
               {/* Shape Top Header & Controls */}
               <div className="w-full flex items-center justify-between gap-1 mb-1 pointer-events-auto">
-                <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate max-w-[80%]">
-                  {shape.type === 'rectangle' ? 'ÁREA POP' : shape.type === 'circle' ? 'COBERTURA' : shape.type === 'sticky_note' ? 'NOTA' : 'RÓTULO'}
-                </span>
+                <div className="flex items-center gap-1.5 truncate max-w-[70%]">
+                  <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate">
+                    {shape.type === 'rectangle' ? 'ÁREA POP' : shape.type === 'circle' ? 'COBERTURA' : shape.type === 'sticky_note' ? 'NOTA' : 'RÓTULO'}
+                  </span>
+                  {shape.isLocked && (
+                    <span className="flex items-center gap-0.5 px-1 py-0.2 bg-amber-500/20 text-amber-400 text-[9px] font-bold rounded border border-amber-500/40" title="Forma Fixa">
+                      <Lock className="w-2.5 h-2.5" />
+                      FIXO
+                    </span>
+                  )}
+                </div>
 
-                {/* Quick actions (Edit / Delete) */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Quick actions (Lock / Edit / Delete) */}
+                <div className={`flex items-center gap-1 transition-opacity ${
+                  shape.isLocked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}>
+                  {onUpdateShape && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateShape(shape.id, { isLocked: !shape.isLocked });
+                      }}
+                      className={`p-1 rounded cursor-pointer transition-all ${
+                        shape.isLocked
+                          ? 'bg-amber-500 text-slate-950 font-bold shadow-md ring-1 ring-amber-300 hover:bg-amber-400'
+                          : 'bg-black/50 hover:bg-black/80 text-white'
+                      }`}
+                      title={shape.isLocked ? "Forma Fixada / Trancada (Clique para destravar e mover)" : "Travar / Fixar Forma (Evita mover por engano)"}
+                    >
+                      {shape.isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => {
