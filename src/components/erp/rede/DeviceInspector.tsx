@@ -114,6 +114,7 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
         };
         reader.readAsDataURL(file);
       }
+      e.target.value = '';
     }
   };
 

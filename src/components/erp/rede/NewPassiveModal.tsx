@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { NetworkNode, DeviceType, DeviceCategory, NetworkPort } from '../../../types/network';
 import { supabaseService } from '../../../services/supabaseService';
+import { safeSetItem } from '../../../utils/safeStorage';
 
 export interface SavedPassiveTemplate {
   id: string;
@@ -229,7 +230,7 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
 
       const updatedTpls = [templateItem, ...savedTemplates.filter(t => t.name !== templateItem.name)];
       setSavedTemplates(updatedTpls);
-      localStorage.setItem('operafacil_saved_passive_templates', JSON.stringify(updatedTpls));
+      safeSetItem('operafacil_saved_passive_templates', updatedTpls);
     }
 
     onAddPassive(newPassiveNode);
@@ -306,7 +307,7 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
     e.stopPropagation();
     const updated = savedTemplates.filter(t => t.id !== id);
     setSavedTemplates(updated);
-    localStorage.setItem('operafacil_saved_passive_templates', JSON.stringify(updated));
+    safeSetItem('operafacil_saved_passive_templates', updated);
   };
 
   const filteredTemplates = savedTemplates.filter(t => {

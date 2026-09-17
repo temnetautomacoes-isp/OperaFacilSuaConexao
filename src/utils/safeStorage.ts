@@ -47,6 +47,21 @@ export const sanitizeTimeRecordForStorage = (rec: any) => {
   };
 };
 
+export const sanitizeTopologyForStorage = (topo: any) => {
+  if (!topo) return topo;
+  return {
+    ...topo,
+    nodes: Array.isArray(topo.nodes)
+      ? topo.nodes.map((n: any) => ({
+          ...n,
+          // Strip heavy base64 strings if any are present (Supabase CDN URLs and memory state are preserved)
+          customImageUrl: n.customImageUrl && n.customImageUrl.startsWith('data:') && n.customImageUrl.length > 30000 ? undefined : n.customImageUrl,
+          imageUrl: n.imageUrl && n.imageUrl.startsWith('data:') && n.imageUrl.length > 30000 ? undefined : n.imageUrl,
+        }))
+      : topo.nodes,
+  };
+};
+
 export const safeSetItem = (key: string, value: any): boolean => {
   try {
     let toStore = value;
@@ -56,6 +71,8 @@ export const safeSetItem = (key: string, value: any): boolean => {
       toStore = value.map(sanitizeDocForStorage);
     } else if (key === 'operafacil_time_records' && Array.isArray(value)) {
       toStore = value.map(sanitizeTimeRecordForStorage);
+    } else if (key === 'operafacil_network_topology' && typeof value === 'object') {
+      toStore = sanitizeTopologyForStorage(value);
     }
     const stringVal = typeof toStore === 'string' ? toStore : JSON.stringify(toStore);
     localStorage.setItem(key, stringVal);

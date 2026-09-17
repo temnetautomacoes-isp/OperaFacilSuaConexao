@@ -46,6 +46,7 @@ import {
   PortPoe 
 } from '../../../types/network';
 import { supabaseService } from '../../../services/supabaseService';
+import { safeSetItem } from '../../../utils/safeStorage';
 import { DEVICE_CATALOG } from './initialNetworkData';
 
 export interface ActiveCategory {
@@ -271,7 +272,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
 
     const updated = [...categories, newCat];
     setCategories(updated);
-    localStorage.setItem('operafacil_active_categories', JSON.stringify(updated));
+    safeSetItem('operafacil_active_categories', updated);
     setSelectedCategoryId(id);
     setIsAddingCategory(false);
     setNewCatName('');
@@ -409,7 +410,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
 
       const updatedTpls = [templateItem, ...savedTemplates.filter(t => t.name !== templateItem.name)];
       setSavedTemplates(updatedTpls);
-      localStorage.setItem('operafacil_saved_asset_templates', JSON.stringify(updatedTpls));
+      safeSetItem('operafacil_saved_asset_templates', updatedTpls);
     }
 
     onAddDevice(newNode);
@@ -476,7 +477,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     e.stopPropagation();
     const updated = savedTemplates.filter(t => t.id !== templateId);
     setSavedTemplates(updated);
-    localStorage.setItem('operafacil_saved_asset_templates', JSON.stringify(updated));
+    safeSetItem('operafacil_saved_asset_templates', updated);
   };
 
   // Only user's saved models (NO hardcoded pre-configured items)

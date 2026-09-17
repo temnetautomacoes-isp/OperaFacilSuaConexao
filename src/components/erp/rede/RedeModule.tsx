@@ -11,6 +11,7 @@ import { OficinaTestesView } from './OficinaTestesView';
 import { PacketTracerModal } from './PacketTracerModal';
 import { supabaseService } from '../../../services/supabaseService';
 import { supabase } from '../../../lib/supabase';
+import { safeSetItem } from '../../../utils/safeStorage';
 
 export const RedeModule: React.FC = () => {
   // Main Sub-Tab: 'documentacao' (Primary / SGP TSMX) or 'oficina' (Testing & Simulator)
@@ -121,7 +122,7 @@ export const RedeModule: React.FC = () => {
             setShapes(shapesToUse);
 
             const mergedTopo = { ...cloudTopo, shapes: shapesToUse };
-            localStorage.setItem('operafacil_network_topology', JSON.stringify(mergedTopo));
+            safeSetItem('operafacil_network_topology', mergedTopo);
             if ((!cloudTopo.shapes || cloudTopo.shapes.length === 0) && shapesToUse.length > 0) {
               supabaseService.saveNetworkTopology(mergedTopo).catch(console.error);
             }
@@ -153,7 +154,7 @@ export const RedeModule: React.FC = () => {
           setNodes(fresh.nodes || []);
           setLinks(fresh.links || []);
           if (fresh.shapes) setShapes(fresh.shapes);
-          localStorage.setItem('operafacil_network_topology', JSON.stringify(fresh));
+          safeSetItem('operafacil_network_topology', fresh);
         }
       })
       .subscribe();
@@ -182,7 +183,7 @@ export const RedeModule: React.FC = () => {
       shapes,
     };
 
-    localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+    safeSetItem('operafacil_network_topology', topo);
     supabaseService.saveNetworkTopology(topo).catch(console.error);
   }, [folders, nodes, links, shapes]);
 
@@ -198,7 +199,7 @@ export const RedeModule: React.FC = () => {
       links,
       shapes,
     };
-    localStorage.setItem('operafacil_network_topology', JSON.stringify(data));
+    safeSetItem('operafacil_network_topology', data);
     supabaseService.saveNetworkTopology(data).catch(console.error);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 2500);
@@ -332,7 +333,7 @@ export const RedeModule: React.FC = () => {
         links,
         shapes: updated,
       };
-      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      safeSetItem('operafacil_network_topology', topo);
       supabaseService.saveNetworkTopology(topo).catch(console.error);
       return updated;
     });
@@ -358,7 +359,7 @@ export const RedeModule: React.FC = () => {
         links,
         shapes: updated,
       };
-      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      safeSetItem('operafacil_network_topology', topo);
       supabaseService.saveNetworkTopology(topo).catch(console.error);
       return updated;
     });
@@ -377,7 +378,7 @@ export const RedeModule: React.FC = () => {
         links,
         shapes: updated,
       };
-      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      safeSetItem('operafacil_network_topology', topo);
       supabaseService.saveNetworkTopology(topo).catch(console.error);
       return updated;
     });
