@@ -265,7 +265,37 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Mouse move on canvas container - Always track precise mousePos in world space
+  // Handle click in drawing mode
+  const handleDrawingClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const clickX = Math.round((e.clientX - rect.left - panOffset.x) / zoom);
+    const clickY = Math.round((e.clientY - rect.top - panOffset.y) / zoom);
+
+    // Check if clicked near an equipment node to snap
+    const nearbyNode = visibleNodes.find(n => {
+      const withinBox = clickX >= n.x - 10 && clickX <= n.x + 100 && clickY >= n.y - 10 && clickY <= n.y + 100;
+      const withinRadius = Math.hypot(clickX - (n.x + 45), clickY - (n.y + 28)) <= 65;
+      return withinBox || withinRadius;
+    });
+
+    let pointToAdd = { x: clickX, y: clickY };
+    if (nearbyNode) {
+      pointToAdd = { x: nearbyNode.x + 64, y: nearbyNode.y + 28 };
+      if (drawingPathPoints.length === 0) {
+        setDrawingSourceNodeId(nearbyNode.id);
+      } else {
+        setDrawingTargetNodeId(nearbyNode.id);
+      }
+    }
+
+    setDrawingPathPoints(prev => [...prev, pointToAdd]);
+    setMousePos(pointToAdd);
+  };
+
+  // Mouse move tracking in world space
   const handleContainerMouseMove = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -285,7 +315,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       setMousePos({ x: Math.round(curX), y: Math.round(curY) });
 
       if (connectingSourceId) {
-        // Target node detection (radial and bounding box)
+        // Target node detection
         const hovered = visibleNodes.find(n => {
           if (n.id === connectingSourceId) return false;
           const withinBox = curX >= n.x - 25 && curX <= n.x + 115 && curY >= n.y - 25 && curY <= n.y + 125;
@@ -410,27 +440,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     onUpdateShape
   ]);
 
-  // Handle Canvas Mouse Down (Click to draw points in Google Earth mode or Pan canvas)
+  // Handle Canvas Mouse Down (Pan canvas or deselect when not in drawing mode)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (isDrawingPathMode) return;
+
     if (connectingSourceId) {
       setConnectingSourceId(null);
       setHoveredTargetNodeId(null);
       return;
-    }
-
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const clickX = Math.round((e.clientX - rect.left - panOffset.x) / zoom);
-    const clickY = Math.round((e.clientY - rect.top - panOffset.y) / zoom);
-
-    // If Google Earth Drawing Path Mode is active, clicking adds a vertex!
-    if (isDrawingPathMode) {
-      if (e.button === 0) {
-        setDrawingPathPoints(prev => [...prev, { x: clickX, y: clickY }]);
-        setMousePos({ x: clickX, y: clickY });
-        return;
-      }
     }
 
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
@@ -442,13 +459,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         setSelectedShapeId(null);
         setEditingShapeId(null);
       }
-    }
-  };
-
-  // Handle Canvas Double Click (Completes drawing path if in draw mode)
-  const handleCanvasDoubleClick = () => {
-    if (isDrawingPathMode && drawingPathPoints.length >= 2) {
-      handleFinishDrawingPath();
     }
   };
 
@@ -464,26 +474,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     setMousePos({ x: startX, y: startY });
   };
 
-  // Handle Node Mouse Down (Single click for select & drag, or connecting link / path point)
+  // Handle Node Mouse Down (Single click for select & drag)
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
+    if (isDrawingPathMode) return;
     e.stopPropagation();
 
     const node = nodes.find((n) => n.id === nodeId);
     if (!node || !containerRef.current) return;
-
-    // If in Google Earth Drawing Mode, clicking on a node snaps to node connector point
-    if (isDrawingPathMode) {
-      const snapX = node.x + 64;
-      const snapY = node.y + 28;
-      if (drawingPathPoints.length === 0) {
-        setDrawingSourceNodeId(nodeId);
-      } else {
-        setDrawingTargetNodeId(nodeId);
-      }
-      setDrawingPathPoints(prev => [...prev, { x: snapX, y: snapY }]);
-      setMousePos({ x: snapX, y: snapY });
-      return;
-    }
 
     // If currently in connection mode, clicking this node completes the link
     if (connectingSourceId) {
@@ -521,6 +518,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Handle Node Mouse Up (Finish drag connection over target node)
   const handleNodeMouseUp = (e: React.MouseEvent, targetNodeId: string) => {
+    if (isDrawingPathMode) return;
     if (connectingSourceId && connectingSourceId !== targetNodeId) {
       e.stopPropagation();
       onAddLink(
@@ -536,6 +534,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Handle Node Double Click (2 Cliques para abrir inspetor e detalhes)
   const handleNodeDoubleClick = (e: React.MouseEvent, nodeId: string) => {
+    if (isDrawingPathMode) return;
     e.stopPropagation();
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -553,10 +552,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Handle Shape Mouse Down
   const handleShapeMouseDown = (e: React.MouseEvent, shape: CanvasShape) => {
-    if (isDrawingPathMode) {
-      // In drawing mode, allow clicking through to add point
-      return;
-    }
+    if (isDrawingPathMode) return;
     e.stopPropagation();
     setSelectedShapeId(shape.id);
     onSelectNode(null);
@@ -700,7 +696,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       ref={containerRef}
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleContainerMouseMove}
-      onDoubleClick={handleCanvasDoubleClick}
       className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] ${
         isDrawingPathMode ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-default'
       } select-none`}
@@ -710,9 +705,11 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
       }}
     >
-      {/* 1. LAYER DE FORMAS (SHAPES & ZONAS POP - renderizadas atrás dos nós) */}
+      {/* ======================================================== */}
+      {/* 1. LAYER DE FORMAS (Z-INDEX 5: Renderizadas atrás dos nós) */}
+      {/* ======================================================== */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none z-5"
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
@@ -733,7 +730,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 top: `${shape.y}px`,
                 width: `${shape.width}px`,
                 height: shape.type === 'text_label' ? 'auto' : `${shape.height}px`,
-                backgroundColor: shape.color || 'rgba(30, 41, 59, 0.4)',
+                backgroundColor: shape.color || 'rgba(30, 41, 59, 0.35)',
                 borderColor: isSelected ? '#facc15' : (shape.borderColor || '#facc15'),
                 borderWidth: `${shape.borderWidth || 2}px`,
                 borderStyle: borderDash,
@@ -830,17 +827,157 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         })}
       </div>
 
-      {/* 2. SVG Canvas Layer for Clean Responsive Vector Links, Polylines & Google Earth Paths */}
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
+      {/* ======================================================== */}
+      {/* 2. LAYER DE EQUIPAMENTOS (Z-INDEX 10: PNG Icons + Labels) */}
+      {/* ======================================================== */}
+      <div
+        className="absolute inset-0 pointer-events-none z-10"
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
         }}
       >
+        {visibleNodes.map((node) => {
+          const isSelected = selectedNodeId === node.id;
+          const isConnectSource = connectingSourceId === node.id;
+          const isTargetHovered = hoveredTargetNodeId === node.id;
+          const isConnectTarget = Boolean(connectingSourceId && connectingSourceId !== node.id);
+          const customImg = node.customImageUrl || node.imageUrl;
+          const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
+
+          return (
+            <div
+              key={node.id}
+              onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+              onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
+              onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
+              style={{
+                left: `${node.x}px`,
+                top: `${node.y}px`,
+                width: '90px',
+              }}
+              className={`absolute pointer-events-auto flex flex-col items-center select-none group transition-transform duration-100 ${
+                isDrawingPathMode ? 'pointer-events-none' : isConnectTarget ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
+              }`}
+              title={`Duplo clique para abrir ${node.name} (ou clique e arraste para mover)`}
+            >
+              {/* Icon / PNG Container */}
+              <div className="relative">
+                <div
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center p-2 transition-all duration-200 ${
+                    customImg
+                      ? 'bg-slate-900/90 border-2 backdrop-blur-xs shadow-lg'
+                      : `bg-gradient-to-br ${getNodeColor(node.category)} border-2`
+                  } ${
+                    isConnectSource
+                      ? 'border-orange-500 ring-4 ring-orange-500/60 shadow-lg shadow-orange-500/40 scale-110'
+                      : isTargetHovered
+                      ? 'border-emerald-400 ring-4 ring-emerald-400/80 scale-115 shadow-xl shadow-emerald-400/50'
+                      : isConnectTarget
+                      ? 'border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-lg scale-105'
+                      : isSelected
+                      ? 'border-orange-400 ring-4 ring-orange-500/40 shadow-xl shadow-orange-500/30 scale-105'
+                      : 'border-slate-700/80 group-hover:border-orange-400/80 group-hover:scale-105 shadow-md shadow-black/40'
+                  }`}
+                >
+                  {customImg ? (
+                    <img
+                      src={customImg}
+                      alt={node.name}
+                      className="w-full h-full object-contain drop-shadow-md pointer-events-none"
+                    />
+                  ) : (
+                    renderDeviceIcon(node)
+                  )}
+                </div>
+
+                {/* Status Dot */}
+                <div
+                  className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900 ${
+                    node.status === 'online'
+                      ? 'bg-emerald-400 animate-pulse'
+                      : node.status === 'warning'
+                      ? 'bg-amber-400'
+                      : 'bg-rose-500'
+                  }`}
+                  title={`Status: ${node.status}`}
+                />
+
+                {/* Right Port Connector Dot */}
+                {!isDrawingPathMode && (
+                  <div
+                    onMouseDown={(e) => handleStartCableDrag(e, node.id)}
+                    onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
+                    className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
+                      isConnectSource
+                        ? 'ring-4 ring-yellow-400 scale-125 animate-pulse bg-orange-500'
+                        : isTargetHovered
+                        ? 'ring-4 ring-emerald-400 scale-135 bg-emerald-500'
+                        : connectingSourceId
+                        ? 'ring-2 ring-emerald-400/80 scale-110 opacity-100'
+                        : 'hover:scale-125 hover:ring-2 hover:ring-yellow-400/80'
+                    }`}
+                    title="Clique e arraste para ligar cabo a outro equipamento"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs pointer-events-none" />
+                  </div>
+                )}
+              </div>
+
+              {/* Node Name & Subtitle Badge */}
+              <div className="mt-1.5 flex flex-col items-center min-w-[130px] max-w-[160px] pointer-events-none">
+                <span
+                  className={`text-[11px] font-bold text-center leading-tight px-1.5 py-0.5 rounded-md transition-colors line-clamp-2 ${
+                    isSelected
+                      ? 'bg-orange-500 text-white font-black shadow-xs'
+                      : 'text-slate-200 bg-slate-900/85 group-hover:text-orange-300 group-hover:bg-slate-900 shadow-2xs backdrop-blur-xs border border-slate-800'
+                  }`}
+                >
+                  {node.name}
+                </span>
+
+                {/* Rack position tag if attached to a rack or rack capacity badge */}
+                {isRack ? (
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-600/30 text-orange-300 border border-orange-500/50 mt-0.5 shadow-2xs">
+                    [{node.totalRackCapacityU || node.rackUnits || 44}U Rack]
+                  </span>
+                ) : (node.parentRackId || node.rackPosition) ? (
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-500/25 text-orange-300 border border-orange-500/40 mt-0.5 shadow-2xs">
+                    {node.rackPosition ? `[${node.rackPosition}]` : '[Ativo]'}
+                  </span>
+                ) : null}
+
+                {(node.ip || node.managementIp || node.hostname) && (
+                  <span className="text-[9.5px] text-slate-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-800 shadow-xs max-w-[150px] truncate text-center">
+                    {node.ip || node.managementIp || node.hostname}
+                  </span>
+                )}
+
+                {node.mac && (
+                  <span className="text-[8.5px] text-purple-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800/60 shadow-xs max-w-[150px] truncate text-center" title={`MAC: ${node.mac}`}>
+                    {node.mac}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ======================================================== */}
+      {/* 3. SVG CANVAS LAYER (Z-INDEX 15: SOBREPÕE O MAPA E NÓS)   */}
+      {/* ======================================================== */}
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none z-15"
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          overflow: 'visible',
+        }}
+      >
         <defs>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
 
@@ -855,8 +992,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   viewBox="0 0 10 10"
                   refX="8"
                   refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
+                  markerWidth="7"
+                  markerHeight="7"
                   orient="auto"
                 >
                   <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill={color} />
@@ -867,8 +1004,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   viewBox="0 0 10 10"
                   refX="2"
                   refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
+                  markerWidth="7"
+                  markerHeight="7"
                   orient="auto"
                 >
                   <path d="M 8 1.5 L 0 5 L 8 8.5 z" fill={color} />
@@ -923,7 +1060,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 d={pathD}
                 fill="none"
                 stroke="transparent"
-                strokeWidth={26}
+                strokeWidth={28}
               />
 
               {/* Selection / Hover Glow */}
@@ -932,8 +1069,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   d={pathD}
                   fill="none"
                   stroke={stroke.color}
-                  strokeWidth={stroke.width + 5}
-                  opacity={0.6}
+                  strokeWidth={stroke.width + 6}
+                  opacity={0.7}
                   filter="url(#glow)"
                 />
               )}
@@ -966,7 +1103,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               <circle
                 cx={startPt.x}
                 cy={startPt.y}
-                r={4}
+                r={4.5}
                 fill={stroke.color}
                 stroke="#ffffff"
                 strokeWidth={1.5}
@@ -978,10 +1115,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   key={pIdx}
                   cx={pt.x}
                   cy={pt.y}
-                  r={4.5}
+                  r={5}
                   fill="#facc15"
                   stroke="#020617"
-                  strokeWidth={1.5}
+                  strokeWidth={2}
                 />
               ))}
 
@@ -1130,7 +1267,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                         d={fixedPathD}
                         fill="none"
                         stroke={lineColor}
-                        strokeWidth={strokeWidth + 0.5}
+                        strokeWidth={strokeWidth + 1}
                         strokeDasharray={strokeDash}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1162,9 +1299,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   {/* Clicked Vertices Dots with High-Contrast Number Badges */}
                   {drawingPathPoints.map((pt, idx) => (
                     <g key={idx} transform={`translate(${pt.x}, ${pt.y})`}>
-                      <circle r={10} fill="#020617" opacity={0.7} />
-                      <circle r={8} fill="#f97316" stroke="#ffffff" strokeWidth={2} />
-                      <text x={0} y={3} fill="#ffffff" fontSize={9} fontWeight="900" textAnchor="middle">
+                      <circle r={11} fill="#020617" opacity={0.7} />
+                      <circle r={8.5} fill="#f97316" stroke="#ffffff" strokeWidth={2.5} />
+                      <text x={0} y={3.5} fill="#ffffff" fontSize={10} fontWeight="900" textAnchor="middle">
                         {idx + 1}
                       </text>
                     </g>
@@ -1173,7 +1310,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   {/* Current Moving Cursor Target Dot */}
                   <g transform={`translate(${mousePos.x}, ${mousePos.y})`}>
                     <circle r={6} fill={lineColor} stroke="#ffffff" strokeWidth={2} />
-                    <circle r={12} fill="none" stroke={lineColor} strokeWidth={1.5} opacity={0.7} className="animate-ping" />
+                    <circle r={14} fill="none" stroke={lineColor} strokeWidth={1.5} opacity={0.8} className="animate-ping" />
                   </g>
                 </g>
               );
@@ -1182,6 +1319,23 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         )}
       </svg>
 
+      {/* ======================================================== */}
+      {/* 4. ACTIVE DRAWING TRANSPARENT CLICK CAPTURE OVERLAY (Z-25) */}
+      {/* ======================================================== */}
+      {isDrawingPathMode && (
+        <div
+          onMouseDown={handleDrawingClick}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (drawingPathPoints.length >= 2) handleFinishDrawingPath();
+          }}
+          className="absolute inset-0 z-25 cursor-crosshair"
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* 5. FLOATING TOP BANNERS & CONTROLS (Z-INDEX 30)          */}
+      {/* ======================================================== */}
       {/* Floating Notification Banner for Google Earth Path Drawing Mode */}
       {isDrawingPathMode && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/98 backdrop-blur-md border border-amber-400/90 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-3 text-white text-xs select-none pointer-events-auto animate-in slide-in-from-top-3">
@@ -1255,143 +1409,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         </div>
       )}
 
-      {/* 4. HTML DOM Layer for Equipment Node Cards (PNG Icon + Item Name + IP + MAC) */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-        }}
-      >
-        {visibleNodes.map((node) => {
-          const isSelected = selectedNodeId === node.id;
-          const isConnectSource = connectingSourceId === node.id;
-          const isTargetHovered = hoveredTargetNodeId === node.id;
-          const isConnectTarget = Boolean(connectingSourceId && connectingSourceId !== node.id);
-          const customImg = node.customImageUrl || node.imageUrl;
-          const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
-
-          return (
-            <div
-              key={node.id}
-              onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
-              onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
-              onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
-              style={{
-                left: `${node.x}px`,
-                top: `${node.y}px`,
-                width: '90px',
-              }}
-              className={`absolute pointer-events-auto flex flex-col items-center select-none group transition-transform duration-100 ${
-                isDrawingPathMode ? 'cursor-crosshair' : isConnectTarget ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
-              }`}
-              title={isDrawingPathMode ? `Clique para adicionar ${node.name} ao traçado` : `Duplo clique para abrir ${node.name} (ou clique e arraste para mover)`}
-            >
-              {/* Icon / PNG Container */}
-              <div className="relative">
-                <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center p-2 transition-all duration-200 ${
-                    customImg
-                      ? 'bg-slate-900/90 border-2 backdrop-blur-xs shadow-lg'
-                      : `bg-gradient-to-br ${getNodeColor(node.category)} border-2`
-                  } ${
-                    isConnectSource
-                      ? 'border-orange-500 ring-4 ring-orange-500/60 shadow-lg shadow-orange-500/40 scale-110'
-                      : isTargetHovered
-                      ? 'border-emerald-400 ring-4 ring-emerald-400/80 scale-115 shadow-xl shadow-emerald-400/50'
-                      : isConnectTarget
-                      ? 'border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-lg scale-105'
-                      : isSelected
-                      ? 'border-orange-400 ring-4 ring-orange-500/40 shadow-xl shadow-orange-500/30 scale-105'
-                      : 'border-slate-700/80 group-hover:border-orange-400/80 group-hover:scale-105 shadow-md shadow-black/40'
-                  }`}
-                >
-                  {customImg ? (
-                    <img
-                      src={customImg}
-                      alt={node.name}
-                      className="w-full h-full object-contain drop-shadow-md pointer-events-none"
-                    />
-                  ) : (
-                    renderDeviceIcon(node)
-                  )}
-                </div>
-
-                {/* Status Dot */}
-                <div
-                  className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900 ${
-                    node.status === 'online'
-                      ? 'bg-emerald-400 animate-pulse'
-                      : node.status === 'warning'
-                      ? 'bg-amber-400'
-                      : 'bg-rose-500'
-                  }`}
-                  title={`Status: ${node.status}`}
-                />
-
-                {/* Right Port Connector Dot */}
-                {!isDrawingPathMode && (
-                  <div
-                    onMouseDown={(e) => handleStartCableDrag(e, node.id)}
-                    onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
-                    className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
-                      isConnectSource
-                        ? 'ring-4 ring-yellow-400 scale-125 animate-pulse bg-orange-500'
-                        : isTargetHovered
-                        ? 'ring-4 ring-emerald-400 scale-135 bg-emerald-500'
-                        : connectingSourceId
-                        ? 'ring-2 ring-emerald-400/80 scale-110 opacity-100'
-                        : 'hover:scale-125 hover:ring-2 hover:ring-yellow-400/80'
-                    }`}
-                    title="Clique e arraste para ligar cabo a outro equipamento"
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs pointer-events-none" />
-                  </div>
-                )}
-              </div>
-
-              {/* Node Name & Subtitle Badge */}
-              <div className="mt-1.5 flex flex-col items-center min-w-[130px] max-w-[160px] pointer-events-none">
-                <span
-                  className={`text-[11px] font-bold text-center leading-tight px-1.5 py-0.5 rounded-md transition-colors line-clamp-2 ${
-                    isSelected
-                      ? 'bg-orange-500 text-white font-black shadow-xs'
-                      : 'text-slate-200 bg-slate-900/85 group-hover:text-orange-300 group-hover:bg-slate-900 shadow-2xs backdrop-blur-xs border border-slate-800'
-                  }`}
-                >
-                  {node.name}
-                </span>
-
-                {/* Rack position tag if attached to a rack or rack capacity badge */}
-                {isRack ? (
-                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-600/30 text-orange-300 border border-orange-500/50 mt-0.5 shadow-2xs">
-                    [{node.totalRackCapacityU || node.rackUnits || 44}U Rack]
-                  </span>
-                ) : (node.parentRackId || node.rackPosition) ? (
-                  <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md bg-orange-500/25 text-orange-300 border border-orange-500/40 mt-0.5 shadow-2xs">
-                    {node.rackPosition ? `[${node.rackPosition}]` : '[Ativo]'}
-                  </span>
-                ) : null}
-
-                {(node.ip || node.managementIp || node.hostname) && (
-                  <span className="text-[9.5px] text-slate-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-800 shadow-xs max-w-[150px] truncate text-center">
-                    {node.ip || node.managementIp || node.hostname}
-                  </span>
-                )}
-
-                {node.mac && (
-                  <span className="text-[8.5px] text-purple-300 font-mono font-bold mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800/60 shadow-xs max-w-[150px] truncate text-center" title={`MAC: ${node.mac}`}>
-                    {node.mac}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Floating Canvas Controls (Zoom In, Zoom Out, Reset 100%, Center) */}
-      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-700 shadow-2xl select-none">
+      <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-700 shadow-2xl select-none">
         <button
           type="button"
           onClick={() => {
