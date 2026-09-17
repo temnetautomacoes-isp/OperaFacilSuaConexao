@@ -107,9 +107,11 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
     return [...getBreadcrumbs(current.parentId), current];
   };
 
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+
   const breadcrumbs = getBreadcrumbs(selectedFolderId);
   const folderNodes = selectedFolderId ? nodes.filter(n => n.folderId === selectedFolderId) : nodes;
-  const selectedNode = nodes.find(n => n.id === selectedNodeId) || null;
+  const selectedNode = isInspectorOpen && selectedNodeId ? (nodes.find(n => n.id === selectedNodeId) || null) : null;
   const selectedLink = links.find(l => l.id === selectedLinkId) || null;
 
   return (
@@ -240,7 +242,10 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
           onSelectFolder={onSelectFolder}
-          onSelectNode={onSelectNode}
+          onSelectNode={(nodeId) => {
+            onSelectNode(nodeId);
+            if (nodeId) setIsInspectorOpen(true);
+          }}
           onToggleFolderVisibility={onToggleFolderVisibility}
           onCreateFolder={onCreateFolder}
           onDeleteFolder={onDeleteFolder}
@@ -258,7 +263,14 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             selectedNodeId={selectedNodeId}
             selectedLinkId={selectedLinkId}
             onSelectNode={onSelectNode}
-            onSelectLink={onSelectLink}
+            onDoubleClickNode={(nodeId) => {
+              onSelectNode(nodeId);
+              setIsInspectorOpen(true);
+            }}
+            onSelectLink={(linkId) => {
+              onSelectLink(linkId);
+              if (linkId) setIsInspectorOpen(true);
+            }}
             onMoveNode={onMoveNode}
             onAddLink={onAddLink}
             isSimulationMode={false}
@@ -346,7 +358,10 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                       return (
                         <tr 
                           key={node.id} 
-                          onClick={() => onSelectNode(node.id)}
+                          onClick={() => {
+                            onSelectNode(node.id);
+                            setIsInspectorOpen(true);
+                          }}
                           className={`hover:bg-orange-50/50 transition-colors cursor-pointer ${
                             selectedNodeId === node.id ? 'bg-orange-50 font-bold' : ''
                           }`}
@@ -426,6 +441,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectNode(node.id);
+                                  setIsInspectorOpen(true);
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-600 text-orange-700 hover:text-white text-[11px] font-bold cursor-pointer transition-colors"
                               >
@@ -468,6 +484,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onAddAssetToRack={handleOpenAddAssetToRack}
           onSaveTopology={onSaveTopology}
           onClose={() => {
+            setIsInspectorOpen(false);
             onSelectNode(null);
             onSelectLink(null);
           }}

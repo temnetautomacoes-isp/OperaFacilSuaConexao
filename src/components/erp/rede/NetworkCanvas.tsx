@@ -37,6 +37,7 @@ interface NetworkCanvasProps {
   selectedNodeId: string | null;
   selectedLinkId: string | null;
   onSelectNode: (nodeId: string | null) => void;
+  onDoubleClickNode?: (nodeId: string) => void;
   onSelectLink: (linkId: string | null) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
   onAddLink: (sourceNodeId: string, targetNodeId: string, linkType: LinkType) => void;
@@ -58,6 +59,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   selectedNodeId,
   selectedLinkId,
   onSelectNode,
+  onDoubleClickNode,
   onSelectLink,
   onMoveNode,
   onAddLink,
@@ -121,11 +123,17 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Global window listeners for drag & pan (ensures smooth, unrestricted movement across full screen)
   useEffect(() => {
-    if (!draggingNodeId && !isPanning) return;
+    if (!draggingNodeId && !isPanning && !connectingSourceId) return;
 
     const onWindowMouseMove = (e: MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
+
+      if (connectingSourceId) {
+        const curX = (e.clientX - rect.left - panOffset.x) / zoom;
+        const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+        setMousePos({ x: Math.round(curX), y: Math.round(curY) });
+      }
 
       if (isPanning) {
         onPanChange({
@@ -153,17 +161,29 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       setDraggingNodeId(null);
     };
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConnectingSourceId(null);
+      }
+    };
+
     window.addEventListener('mousemove', onWindowMouseMove);
     window.addEventListener('mouseup', onWindowMouseUp);
+    window.addEventListener('keydown', onKeyDown);
 
     return () => {
       window.removeEventListener('mousemove', onWindowMouseMove);
       window.removeEventListener('mouseup', onWindowMouseUp);
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [draggingNodeId, isPanning, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
+  }, [draggingNodeId, isPanning, connectingSourceId, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
 
   // Handle Canvas Mouse Down (Pan canvas or deselect)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (connectingSourceId) {
+      setConnectingSourceId(null);
+      return;
+    }
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
       if (e.button === 0 || e.button === 1) {
         setIsPanning(true);
@@ -177,10 +197,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   // Handle Mouse Move (Local cursor tracking for wire connections)
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
+    if (rect && connectingSourceId) {
       const curX = (e.clientX - rect.left - panOffset.x) / zoom;
       const curY = (e.clientY - rect.top - panOffset.y) / zoom;
-      setMousePos({ x: curX, y: curY });
+      setMousePos({ x: Math.round(curX), y: Math.round(curY) });
     }
   };
 
@@ -190,17 +210,21 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     setDraggingNodeId(null);
   };
 
-  // Handle Node Mouse Down (Select or start drag)
+  // Handle Node Mouse Down (Single click for select & drag, or connecting link)
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
 
-    if (isConnectingMode || connectingSourceId) {
-      if (!connectingSourceId) {
-        setConnectingSourceId(nodeId);
-      } else if (connectingSourceId !== nodeId) {
+    // If currently in connection mode, clicking this node completes the link
+    if (connectingSourceId) {
+      if (connectingSourceId !== nodeId) {
         onAddLink(connectingSourceId, nodeId, selectedCableType as LinkType);
-        setConnectingSourceId(null);
       }
+      setConnectingSourceId(null);
+      return;
+    }
+
+    if (isConnectingMode) {
+      setConnectingSourceId(nodeId);
       return;
     }
 
@@ -210,11 +234,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     onSelectNode(nodeId);
     setDraggingNodeId(nodeId);
 
-    const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
-    if (isRack && onOpenRackElevation) {
-      onOpenRackElevation(node);
-    }
-
     const rect = containerRef.current.getBoundingClientRect();
     const clickX = (e.clientX - rect.left - panOffset.x) / zoom;
     const clickY = (e.clientY - rect.top - panOffset.y) / zoom;
@@ -223,6 +242,23 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       x: clickX - node.x,
       y: clickY - node.y,
     });
+  };
+
+  // Handle Node Double Click (2 Cliques para abrir inspetor e detalhes)
+  const handleNodeDoubleClick = (e: React.MouseEvent, nodeId: string) => {
+    e.stopPropagation();
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    onSelectNode(nodeId);
+    if (onDoubleClickNode) {
+      onDoubleClickNode(nodeId);
+    }
+
+    const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
+    if (isRack && onOpenRackElevation) {
+      onOpenRackElevation(node);
+    }
   };
 
   // Get Cable Link Visual Styling
@@ -426,18 +462,20 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           );
         })}
 
-        {/* Temporary connecting line when drawing a new cable */}
+        {/* Temporary connecting line when drawing a new cable (smooth glowing bezier curve) */}
         {connectingSourceNode && (
-          <line
-            x1={connectingSourceNode.x + 45}
-            y1={connectingSourceNode.y + 28}
-            x2={mousePos.x}
-            y2={mousePos.y}
-            stroke="#fb923c"
-            strokeWidth={3}
-            strokeDasharray="6,4"
-            className="animate-pulse"
-          />
+          <g>
+            <path
+              d={`M ${connectingSourceNode.x + 45} ${connectingSourceNode.y + 28} Q ${(connectingSourceNode.x + 45 + mousePos.x) / 2} ${connectingSourceNode.y + 28} ${mousePos.x} ${mousePos.y}`}
+              fill="none"
+              stroke="#fb923c"
+              strokeWidth={4}
+              strokeDasharray="8,6"
+              filter="url(#glow)"
+              className="animate-pulse"
+            />
+            <circle cx={mousePos.x} cy={mousePos.y} r={6} fill="#f97316" stroke="#ffffff" strokeWidth={2} />
+          </g>
         )}
 
         {/* Active Simulation Packet Animations (Traveling ICMP Echo / Ping dots) */}
@@ -461,6 +499,24 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         })}
       </svg>
 
+      {/* Connection Mode Helper Notification Banner */}
+      {connectingSourceNode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md border border-orange-500/80 shadow-2xl rounded-2xl px-4 py-2 flex items-center gap-3 text-white text-xs select-none pointer-events-auto">
+          <div className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-ping shrink-0" />
+          <span>
+            Ligando cabo <strong className="text-orange-400">{selectedCableType.toUpperCase()}</strong> de{' '}
+            <strong className="text-white">{connectingSourceNode.name}</strong> → Clique no dispositivo de destino
+          </span>
+          <button
+            type="button"
+            onClick={() => setConnectingSourceId(null)}
+            className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-600 cursor-pointer ml-1 transition-colors"
+          >
+            Cancelar (ESC)
+          </button>
+        </div>
+      )}
+
       {/* HTML DOM Layer for Clean Item Nodes (PNG Image + Item Name) */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -472,6 +528,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         {visibleNodes.map((node) => {
           const isSelected = selectedNodeId === node.id;
           const isConnectSource = connectingSourceId === node.id;
+          const isConnectTarget = Boolean(connectingSourceId && connectingSourceId !== node.id);
           const customImg = node.customImageUrl || node.imageUrl;
           const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
 
@@ -479,13 +536,16 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
             <div
               key={node.id}
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+              onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
               style={{
                 left: `${node.x}px`,
                 top: `${node.y}px`,
                 width: '90px',
               }}
-              className="absolute pointer-events-auto flex flex-col items-center cursor-grab active:cursor-grabbing select-none group transition-transform duration-100"
-              title={`Clique para ver detalhes de ${node.name}`}
+              className={`absolute pointer-events-auto flex flex-col items-center select-none group transition-transform duration-100 ${
+                isConnectTarget ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
+              }`}
+              title={`Duplo clique para abrir ${node.name} (ou clique e arraste para mover)`}
             >
               {/* Icon / PNG Container */}
               <div className="relative">
@@ -496,7 +556,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       : `bg-gradient-to-br ${getNodeColor(node.category)} border-2`
                   } ${
                     isConnectSource
-                      ? 'border-orange-500 ring-4 ring-orange-500/50 shadow-lg shadow-orange-500/40 scale-110'
+                      ? 'border-orange-500 ring-4 ring-orange-500/60 shadow-lg shadow-orange-500/40 scale-110'
+                      : isConnectTarget
+                      ? 'border-emerald-400 ring-4 ring-emerald-400/50 shadow-lg shadow-emerald-400/30 scale-105'
                       : isSelected
                       ? 'border-orange-400 ring-4 ring-orange-500/40 shadow-xl shadow-orange-500/30 scale-105'
                       : 'border-slate-700/80 group-hover:border-orange-400/80 group-hover:scale-105 shadow-md shadow-black/40'
@@ -528,19 +590,33 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 {/* Port Anchor Point (for connecting cables) */}
                 <button
                   type="button"
-                  className="absolute -right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-orange-500 hover:bg-orange-400 text-white font-black text-[10px] border-2 border-slate-900 shadow-md opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-crosshair hover:scale-125 z-10"
-                  title="Conectar cabo a outro dispositivo"
+                  className={`absolute -right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full font-black text-xs border-2 border-slate-900 shadow-lg flex items-center justify-center cursor-crosshair transition-all z-20 ${
+                    isConnectSource
+                      ? 'bg-amber-400 text-slate-950 scale-125 ring-4 ring-amber-400/50'
+                      : isConnectTarget
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-white scale-115 opacity-100 ring-2 ring-emerald-400/50'
+                      : 'bg-orange-500 hover:bg-orange-400 text-white opacity-0 group-hover:opacity-100 hover:scale-125 shadow-orange-500/30'
+                  }`}
+                  title={
+                    isConnectSource
+                      ? 'Conexão ativa! Clique em outro equipamento para ligar'
+                      : connectingSourceId
+                      ? 'Clique para conectar o cabo aqui'
+                      : 'Clique para puxar cabo / ligar a outro equipamento'
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!connectingSourceId) {
                       setConnectingSourceId(node.id);
-                    } else if (connectingSourceId !== node.id) {
+                    } else if (connectingSourceId === node.id) {
+                      setConnectingSourceId(null);
+                    } else {
                       onAddLink(connectingSourceId, node.id, selectedCableType as LinkType);
                       setConnectingSourceId(null);
                     }
                   }}
                 >
-                  +
+                  {isConnectTarget ? '✔' : isConnectSource ? '✕' : '+'}
                 </button>
               </div>
 
