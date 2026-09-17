@@ -134,7 +134,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     return DEFAULT_ACTIVE_CATEGORIES;
   });
 
-  // Saved templates state (loaded from localStorage)
+  // Saved templates state (loaded from localStorage / Supabase)
   const [savedTemplates, setSavedTemplates] = useState<SavedAssetTemplate[]>(() => {
     try {
       const saved = localStorage.getItem('operafacil_saved_asset_templates');
@@ -145,6 +145,28 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     } catch {}
     return [];
   });
+
+  // Sync templates and categories from Supabase on mount
+  useEffect(() => {
+    async function loadCloudTemplates() {
+      try {
+        const cloudTpls = await supabaseService.fetchNetworkAssetTemplates();
+        if (cloudTpls && cloudTpls.length > 0) {
+          setSavedTemplates(cloudTpls);
+          safeSetItem('operafacil_saved_asset_templates', cloudTpls);
+        }
+
+        const cloudCats = await supabaseService.fetchNetworkActiveCategories();
+        if (cloudCats && cloudCats.length > 0) {
+          setCategories(cloudCats);
+          safeSetItem('operafacil_active_categories', cloudCats);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar modelos do Supabase:', e);
+      }
+    }
+    loadCloudTemplates();
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'create_scratch' | 'templates'>('create_scratch');
 
@@ -273,6 +295,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     const updated = [...categories, newCat];
     setCategories(updated);
     safeSetItem('operafacil_active_categories', updated);
+    supabaseService.saveNetworkActiveCategory(newCat).catch(console.error);
     setSelectedCategoryId(id);
     setIsAddingCategory(false);
     setNewCatName('');
@@ -411,6 +434,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
       const updatedTpls = [templateItem, ...savedTemplates.filter(t => t.name !== templateItem.name)];
       setSavedTemplates(updatedTpls);
       safeSetItem('operafacil_saved_asset_templates', updatedTpls);
+      supabaseService.saveNetworkAssetTemplate(templateItem).catch(console.error);
     }
 
     onAddDevice(newNode);
@@ -478,6 +502,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     const updated = savedTemplates.filter(t => t.id !== templateId);
     setSavedTemplates(updated);
     safeSetItem('operafacil_saved_asset_templates', updated);
+    supabaseService.deleteNetworkAssetTemplate(templateId).catch(console.error);
   };
 
   // Only user's saved models (NO hardcoded pre-configured items)

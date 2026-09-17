@@ -78,7 +78,7 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
     availableSlots.push(i);
   }
 
-  // Saved templates state (starts empty as requested, persisted in localStorage)
+  // Saved templates state (starts empty as requested, persisted in localStorage / Supabase)
   const [savedTemplates, setSavedTemplates] = useState<SavedPassiveTemplate[]>(() => {
     try {
       const saved = localStorage.getItem('operafacil_saved_passive_templates');
@@ -89,6 +89,22 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
     } catch {}
     return [];
   });
+
+  // Sync passive templates from Supabase on mount
+  useEffect(() => {
+    async function loadCloudPassiveTemplates() {
+      try {
+        const cloudTpls = await supabaseService.fetchNetworkPassiveTemplates();
+        if (cloudTpls && cloudTpls.length > 0) {
+          setSavedTemplates(cloudTpls);
+          safeSetItem('operafacil_saved_passive_templates', cloudTpls);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar modelos passivos do Supabase:', e);
+      }
+    }
+    loadCloudPassiveTemplates();
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'create_scratch' | 'saved_templates'>('create_scratch');
 
@@ -231,6 +247,7 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
       const updatedTpls = [templateItem, ...savedTemplates.filter(t => t.name !== templateItem.name)];
       setSavedTemplates(updatedTpls);
       safeSetItem('operafacil_saved_passive_templates', updatedTpls);
+      supabaseService.saveNetworkPassiveTemplate(templateItem).catch(console.error);
     }
 
     onAddPassive(newPassiveNode);
@@ -308,6 +325,7 @@ export const NewPassiveModal: React.FC<NewPassiveModalProps> = ({
     const updated = savedTemplates.filter(t => t.id !== id);
     setSavedTemplates(updated);
     safeSetItem('operafacil_saved_passive_templates', updated);
+    supabaseService.deleteNetworkPassiveTemplate(id).catch(console.error);
   };
 
   const filteredTemplates = savedTemplates.filter(t => {

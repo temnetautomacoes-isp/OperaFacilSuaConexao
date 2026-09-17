@@ -482,6 +482,125 @@ export const supabaseService = {
   },
 
   // -------------------------------------------------------------
+  // NETWORK ASSET & PASSIVE TEMPLATES
+  // -------------------------------------------------------------
+  async fetchNetworkAssetTemplates(): Promise<any[]> {
+    const { data, error } = await supabase.from('network_asset_templates').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(d => ({
+      id: d.id,
+      name: d.name,
+      categoryName: d.category_name,
+      deviceType: d.device_type,
+      category: d.category,
+      vendor: d.vendor,
+      model: d.model,
+      rackUnits: d.rack_units || 1,
+      powerSupply: d.power_supply,
+      powerConsumptionWatts: d.power_consumption_watts || 0,
+      osType: d.os_type,
+      defaultPorts: Array.isArray(d.default_ports) ? d.default_ports : [],
+      notes: d.notes,
+      customImageUrl: d.custom_image_url,
+      createdAt: d.created_at,
+      isCustomTemplate: d.is_custom_template,
+    }));
+  },
+
+  async saveNetworkAssetTemplate(tpl: any): Promise<void> {
+    await supabase.from('network_asset_templates').upsert({
+      id: tpl.id,
+      name: tpl.name,
+      category_name: tpl.categoryName,
+      device_type: tpl.deviceType,
+      category: tpl.category,
+      vendor: tpl.vendor,
+      model: tpl.model,
+      rack_units: tpl.rackUnits || 1,
+      power_supply: tpl.powerSupply,
+      power_consumption_watts: tpl.powerConsumptionWatts || 0,
+      os_type: tpl.osType,
+      default_ports: tpl.defaultPorts || [],
+      notes: tpl.notes || null,
+      custom_image_url: tpl.customImageUrl || null,
+      created_at: tpl.createdAt || new Date().toISOString(),
+      is_custom_template: tpl.isCustomTemplate !== false,
+    }, { onConflict: 'id' });
+  },
+
+  async deleteNetworkAssetTemplate(id: string): Promise<void> {
+    await supabase.from('network_asset_templates').delete().eq('id', id);
+  },
+
+  async fetchNetworkPassiveTemplates(): Promise<any[]> {
+    const { data, error } = await supabase.from('network_passive_templates').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(d => ({
+      id: d.id,
+      name: d.name,
+      type: d.type,
+      category: d.category,
+      model: d.model,
+      vendor: d.vendor,
+      rackUnits: d.rack_units || 1,
+      totalPorts: d.total_ports || 0,
+      ports: Array.isArray(d.ports) ? d.ports : [],
+      notes: d.notes,
+      customImageUrl: d.custom_image_url,
+      createdAt: d.created_at,
+    }));
+  },
+
+  async saveNetworkPassiveTemplate(tpl: any): Promise<void> {
+    await supabase.from('network_passive_templates').upsert({
+      id: tpl.id,
+      name: tpl.name,
+      type: tpl.type,
+      category: tpl.category,
+      model: tpl.model,
+      vendor: tpl.vendor,
+      rack_units: tpl.rackUnits || 1,
+      total_ports: tpl.totalPorts || 0,
+      ports: tpl.ports || [],
+      notes: tpl.notes || null,
+      custom_image_url: tpl.customImageUrl || null,
+      created_at: tpl.createdAt || new Date().toISOString(),
+    }, { onConflict: 'id' });
+  },
+
+  async deleteNetworkPassiveTemplate(id: string): Promise<void> {
+    await supabase.from('network_passive_templates').delete().eq('id', id);
+  },
+
+  async fetchNetworkActiveCategories(): Promise<any[]> {
+    const { data, error } = await supabase.from('network_active_categories').select('*');
+    if (error || !data) return [];
+    return data.map(d => ({
+      id: d.id,
+      name: d.name,
+      badge: d.badge,
+      defaultType: d.default_type,
+      defaultCategory: d.default_category,
+      defaultVendor: d.default_vendor,
+      defaultOs: d.default_os,
+      description: d.description,
+    }));
+  },
+
+  async saveNetworkActiveCategory(cat: any): Promise<void> {
+    await supabase.from('network_active_categories').upsert({
+      id: cat.id,
+      name: cat.name,
+      badge: cat.badge,
+      default_type: cat.defaultType,
+      default_category: cat.defaultCategory,
+      default_vendor: cat.defaultVendor,
+      default_os: cat.defaultOs,
+      description: cat.description,
+    }, { onConflict: 'id' });
+  },
+
+  // -------------------------------------------------------------
   // ARMAZENAMENTO DE ARQUIVOS (SUPABASE FILE STORAGE)
   // -------------------------------------------------------------
   /**
