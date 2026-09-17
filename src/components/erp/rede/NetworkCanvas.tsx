@@ -935,9 +935,11 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               {/* Shape Top Header & Controls */}
               <div className="w-full flex items-center justify-between gap-1 mb-1 pointer-events-auto">
                 <div className="flex items-center gap-1.5 truncate max-w-[70%]">
-                  <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate">
-                    {shape.type === 'rectangle' ? 'ÁREA POP' : shape.type === 'circle' ? 'COBERTURA' : shape.type === 'sticky_note' ? 'NOTA' : 'RÓTULO'}
-                  </span>
+                  {shape.type !== 'text_label' && (
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate">
+                      {shape.type === 'rectangle' ? 'ÁREA POP' : shape.type === 'circle' ? 'COBERTURA' : 'NOTA'}
+                    </span>
+                  )}
                   {shape.isLocked && (
                     <span className="flex items-center gap-0.5 px-1 py-0.2 bg-amber-500/20 text-amber-400 text-[9px] font-bold rounded border border-amber-500/40" title="Forma Fixa">
                       <Lock className="w-2.5 h-2.5" />
