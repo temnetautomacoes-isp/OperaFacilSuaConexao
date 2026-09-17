@@ -196,6 +196,7 @@ export const RedeModule: React.FC = () => {
       folders,
       nodes,
       links,
+      shapes,
     };
     localStorage.setItem('operafacil_network_topology', JSON.stringify(data));
     supabaseService.saveNetworkTopology(data).catch(console.error);
@@ -319,25 +320,67 @@ export const RedeModule: React.FC = () => {
 
   // Shape Handlers
   const handleAddShape = (shape: CanvasShape) => {
-    setShapes((prev) => [...prev, shape]);
+    setShapes((prev) => {
+      const updated = [...prev, shape];
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes,
+        links,
+        shapes: updated,
+      };
+      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return updated;
+    });
   };
 
   const handleUpdateShape = (shapeOrId: CanvasShape | string, updates?: Partial<CanvasShape>) => {
-    if (typeof shapeOrId === 'string') {
-      const shapeId = shapeOrId;
-      setShapes((prev) =>
-        prev.map((s) => (s.id === shapeId ? { ...s, ...(updates || {}) } : s))
-      );
-    } else {
-      const updatedShape = shapeOrId;
-      setShapes((prev) =>
-        prev.map((s) => (s.id === updatedShape.id ? { ...s, ...updatedShape } : s))
-      );
-    }
+    setShapes((prev) => {
+      let updated: CanvasShape[];
+      if (typeof shapeOrId === 'string') {
+        const shapeId = shapeOrId;
+        updated = prev.map((s) => (s.id === shapeId ? { ...s, ...(updates || {}) } : s));
+      } else {
+        const updatedShape = shapeOrId;
+        updated = prev.map((s) => (s.id === updatedShape.id ? { ...s, ...updatedShape } : s));
+      }
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes,
+        links,
+        shapes: updated,
+      };
+      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return updated;
+    });
   };
 
   const handleDeleteShape = (shapeId: string) => {
-    setShapes((prev) => prev.filter((s) => s.id !== shapeId));
+    setShapes((prev) => {
+      const updated = prev.filter((s) => s.id !== shapeId);
+      const topo: TopologyData = {
+        id: 'topo-main',
+        name: 'Topologia e Documentação de Rede',
+        updatedAt: new Date().toISOString(),
+        gridSnap: true,
+        folders,
+        nodes,
+        links,
+        shapes: updated,
+      };
+      localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
+      supabaseService.saveNetworkTopology(topo).catch(console.error);
+      return updated;
+    });
   };
 
   // Move Node
@@ -521,6 +564,7 @@ export const RedeModule: React.FC = () => {
       folders,
       nodes,
       links,
+      shapes,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
