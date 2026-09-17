@@ -25,6 +25,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  RotateCw,
+  Maximize2,
   Trash2,
   Edit3,
   Check,
@@ -179,15 +181,37 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   
   // Drag & Pan states
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
-  const [draggingShapeId, setDraggingShapeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Shape selection & inline editing state
+  // Shape transform states (Move, Resize, Rotate & Scale)
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [editingShapeText, setEditingShapeText] = useState('');
+  const [transformingShapeId, setTransformingShapeId] = useState<string | null>(null);
+  const [transformMode, setTransformMode] = useState<'move' | 'resize' | 'rotate_scale' | null>(null);
+  const [transformStart, setTransformStart] = useState<{
+    mouseX: number;
+    mouseY: number;
+    shapeX: number;
+    shapeY: number;
+    width: number;
+    height: number;
+    rotation: number;
+    centerX: number;
+    centerY: number;
+  }>({
+    mouseX: 0,
+    mouseY: 0,
+    shapeX: 0,
+    shapeY: 0,
+    width: 0,
+    height: 0,
+    rotation: 0,
+    centerX: 0,
+    centerY: 0,
+  });
 
   // Connecting cable state (Drag dot to Connect)
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
@@ -265,37 +289,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Handle click in drawing mode
-  const handleDrawingClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const clickX = Math.round((e.clientX - rect.left - panOffset.x) / zoom);
-    const clickY = Math.round((e.clientY - rect.top - panOffset.y) / zoom);
-
-    // Check if clicked near an equipment node to snap
-    const nearbyNode = visibleNodes.find(n => {
-      const withinBox = clickX >= n.x - 10 && clickX <= n.x + 100 && clickY >= n.y - 10 && clickY <= n.y + 100;
-      const withinRadius = Math.hypot(clickX - (n.x + 45), clickY - (n.y + 28)) <= 65;
-      return withinBox || withinRadius;
-    });
-
-    let pointToAdd = { x: clickX, y: clickY };
-    if (nearbyNode) {
-      pointToAdd = { x: nearbyNode.x + 64, y: nearbyNode.y + 28 };
-      if (drawingPathPoints.length === 0) {
-        setDrawingSourceNodeId(nearbyNode.id);
-      } else {
-        setDrawingTargetNodeId(nearbyNode.id);
-      }
-    }
-
-    setDrawingPathPoints(prev => [...prev, pointToAdd]);
-    setMousePos(pointToAdd);
-  };
-
-  // Mouse move tracking in world space
+  // Mouse move on canvas container
   const handleContainerMouseMove = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -304,7 +298,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     setMousePos({ x: Math.round(curX), y: Math.round(curY) });
   };
 
-  // Global window listeners for drag, pan & keyboard shortcuts
+  // Global window listeners for dragging nodes, transforming shapes & pan
   useEffect(() => {
     const onWindowMouseMove = (e: MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -344,27 +338,73 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         onMoveNode(draggingNodeId, newX, newY);
       }
 
-      if (draggingShapeId && onUpdateShape) {
+      // Shape Transformation: Move
+      if (transformingShapeId && transformMode === 'move' && onUpdateShape) {
         let newX = curX - dragOffset.x;
         let newY = curY - dragOffset.y;
 
         newX = Math.round(newX / 10) * 10;
         newY = Math.round(newY / 10) * 10;
 
-        onUpdateShape(draggingShapeId, { x: newX, y: newY });
+        onUpdateShape(transformingShapeId, { x: newX, y: newY });
+      }
+
+      // Shape Transformation: Resize Corner Handle
+      if (transformingShapeId && transformMode === 'resize' && onUpdateShape) {
+        const deltaX = curX - transformStart.mouseX;
+        const deltaY = curY - transformStart.mouseY;
+
+        const currentShape = shapes.find(s => s.id === transformingShapeId);
+        const isCircle = currentShape?.type === 'circle';
+
+        let newW = Math.max(50, Math.round(transformStart.width + deltaX));
+        let newH = isCircle ? newW : Math.max(35, Math.round(transformStart.height + deltaY));
+
+        onUpdateShape(transformingShapeId, {
+          width: newW,
+          height: newH,
+        });
+      }
+
+      // Shape Transformation: Rotate & Scale Handle
+      if (transformingShapeId && transformMode === 'rotate_scale' && onUpdateShape) {
+        const dx = curX - transformStart.centerX;
+        const dy = curY - transformStart.centerY;
+
+        // 1. Calculate rotation in degrees
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = Math.round((angleRad * 180 / Math.PI) + 90);
+        const normalizedAngle = (angleDeg % 360 + 360) % 360;
+
+        // 2. Calculate radial distance to scale size proportionally
+        const dist = Math.hypot(dx, dy);
+        const initialDist = Math.hypot(transformStart.width / 2, transformStart.height / 2) || 80;
+        const scaleFactor = Math.max(0.3, dist / initialDist);
+
+        const currentShape = shapes.find(s => s.id === transformingShapeId);
+        const isCircle = currentShape?.type === 'circle';
+
+        let newW = Math.max(50, Math.round(transformStart.width * scaleFactor));
+        let newH = isCircle ? newW : Math.max(35, Math.round(transformStart.height * scaleFactor));
+
+        onUpdateShape(transformingShapeId, {
+          rotation: normalizedAngle,
+          width: newW,
+          height: newH,
+        });
       }
     };
 
     const onWindowMouseUp = () => {
       setIsPanning(false);
       setDraggingNodeId(null);
-      setDraggingShapeId(null);
+      setTransformingShapeId(null);
+      setTransformMode(null);
 
       if (connectingSourceId) {
         const curX = mousePos.x;
         const curY = mousePos.y;
 
-        // Connect if dropped over target node
         let target = hoveredTargetNodeId ? visibleNodes.find(n => n.id === hoveredTargetNodeId) : null;
         if (!target) {
           target = visibleNodes.find(n => {
@@ -418,11 +458,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     };
   }, [
     draggingNodeId, 
-    draggingShapeId, 
+    transformingShapeId,
+    transformMode,
+    transformStart,
     isPanning, 
     connectingSourceId, 
     hoveredTargetNodeId, 
     visibleNodes, 
+    shapes,
     selectedCableType, 
     activeLineConfig, 
     isDrawingPathMode,
@@ -440,7 +483,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     onUpdateShape
   ]);
 
-  // Handle Canvas Mouse Down (Pan canvas or deselect when not in drawing mode)
+  // Handle Canvas Mouse Down (Pan canvas or deselect)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (isDrawingPathMode) return;
 
@@ -460,6 +503,112 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         setEditingShapeId(null);
       }
     }
+  };
+
+  // Start Shape Move (Click border or body)
+  const handleStartShapeMove = (e: React.MouseEvent, shape: CanvasShape) => {
+    if (isDrawingPathMode) return;
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    onSelectNode(null);
+    onSelectLink(null);
+
+    setTransformingShapeId(shape.id);
+    setTransformMode('move');
+
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const clickY = (e.clientY - rect.top - panOffset.y) / zoom;
+      setDragOffset({
+        x: clickX - shape.x,
+        y: clickY - shape.y,
+      });
+    }
+  };
+
+  // Start Shape Resize (Corner Handle)
+  const handleStartShapeResize = (e: React.MouseEvent, shape: CanvasShape) => {
+    if (isDrawingPathMode) return;
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    setTransformingShapeId(shape.id);
+    setTransformMode('resize');
+
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const curX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+
+      setTransformStart({
+        mouseX: curX,
+        mouseY: curY,
+        shapeX: shape.x,
+        shapeY: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation || 0,
+        centerX: shape.x + shape.width / 2,
+        centerY: shape.y + shape.height / 2,
+      });
+    }
+  };
+
+  // Start Shape Rotate & Scale (Top Rotation Handle)
+  const handleStartShapeRotateScale = (e: React.MouseEvent, shape: CanvasShape) => {
+    if (isDrawingPathMode) return;
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    setTransformingShapeId(shape.id);
+    setTransformMode('rotate_scale');
+
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const curX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+
+      setTransformStart({
+        mouseX: curX,
+        mouseY: curY,
+        shapeX: shape.x,
+        shapeY: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation || 0,
+        centerX: shape.x + shape.width / 2,
+        centerY: shape.y + shape.height / 2,
+      });
+    }
+  };
+
+  // Handle click in drawing mode
+  const handleDrawingClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const clickX = Math.round((e.clientX - rect.left - panOffset.x) / zoom);
+    const clickY = Math.round((e.clientY - rect.top - panOffset.y) / zoom);
+
+    // Check if clicked near an equipment node to snap
+    const nearbyNode = visibleNodes.find(n => {
+      const withinBox = clickX >= n.x - 10 && clickX <= n.x + 100 && clickY >= n.y - 10 && clickY <= n.y + 100;
+      const withinRadius = Math.hypot(clickX - (n.x + 45), clickY - (n.y + 28)) <= 65;
+      return withinBox || withinRadius;
+    });
+
+    let pointToAdd = { x: clickX, y: clickY };
+    if (nearbyNode) {
+      pointToAdd = { x: nearbyNode.x + 64, y: nearbyNode.y + 28 };
+      if (drawingPathPoints.length === 0) {
+        setDrawingSourceNodeId(nearbyNode.id);
+      } else {
+        setDrawingTargetNodeId(nearbyNode.id);
+      }
+    }
+
+    setDrawingPathPoints(prev => [...prev, pointToAdd]);
+    setMousePos(pointToAdd);
   };
 
   // Start Cable Drag from Connector Dot
@@ -482,7 +631,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     const node = nodes.find((n) => n.id === nodeId);
     if (!node || !containerRef.current) return;
 
-    // If currently in connection mode, clicking this node completes the link
     if (connectingSourceId) {
       if (connectingSourceId !== nodeId) {
         onAddLink(
@@ -516,7 +664,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     });
   };
 
-  // Handle Node Mouse Up (Finish drag connection over target node)
+  // Handle Node Mouse Up
   const handleNodeMouseUp = (e: React.MouseEvent, targetNodeId: string) => {
     if (isDrawingPathMode) return;
     if (connectingSourceId && connectingSourceId !== targetNodeId) {
@@ -532,7 +680,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Handle Node Double Click (2 Cliques para abrir inspetor e detalhes)
+  // Handle Node Double Click
   const handleNodeDoubleClick = (e: React.MouseEvent, nodeId: string) => {
     if (isDrawingPathMode) return;
     e.stopPropagation();
@@ -547,26 +695,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     const isRack = node.type === 'rack_floor' || node.type === 'rack_wall' || node.type === 'rack_19';
     if (isRack && onOpenRackElevation) {
       onOpenRackElevation(node);
-    }
-  };
-
-  // Handle Shape Mouse Down
-  const handleShapeMouseDown = (e: React.MouseEvent, shape: CanvasShape) => {
-    if (isDrawingPathMode) return;
-    e.stopPropagation();
-    setSelectedShapeId(shape.id);
-    onSelectNode(null);
-    onSelectLink(null);
-    setDraggingShapeId(shape.id);
-
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const clickX = (e.clientX - rect.left - panOffset.x) / zoom;
-      const clickY = (e.clientY - rect.top - panOffset.y) / zoom;
-      setDragOffset({
-        x: clickX - shape.x,
-        y: clickY - shape.y,
-      });
     }
   };
 
@@ -718,13 +846,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         {shapes.map((shape) => {
           const isSelected = selectedShapeId === shape.id;
           const isEditing = editingShapeId === shape.id;
+          const isTransformingThis = transformingShapeId === shape.id;
 
           const borderDash = shape.borderStyle === 'dashed' ? 'dashed' : shape.borderStyle === 'dotted' ? 'dotted' : 'solid';
 
           return (
             <div
               key={shape.id}
-              onMouseDown={(e) => handleShapeMouseDown(e, shape)}
+              onMouseDown={(e) => handleStartShapeMove(e, shape)}
               style={{
                 left: `${shape.x}px`,
                 top: `${shape.y}px`,
@@ -732,21 +861,57 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 height: shape.type === 'text_label' ? 'auto' : `${shape.height}px`,
                 backgroundColor: shape.color || 'rgba(30, 41, 59, 0.35)',
                 borderColor: isSelected ? '#facc15' : (shape.borderColor || '#facc15'),
-                borderWidth: `${shape.borderWidth || 2}px`,
+                borderWidth: `${shape.borderWidth || 2.5}px`,
                 borderStyle: borderDash,
                 color: shape.textColor || '#f8fafc',
                 fontSize: `${shape.fontSize || 13}px`,
+                transform: `rotate(${shape.rotation || 0}deg)`,
+                transformOrigin: 'center center',
               }}
               className={`absolute pointer-events-auto rounded-2xl p-3 flex flex-col justify-between group transition-shadow select-none ${
-                isDrawingPathMode ? 'pointer-events-none' : 'cursor-move'
+                isDrawingPathMode ? 'pointer-events-none' : 'cursor-grab active:cursor-grabbing'
               } ${
                 shape.type === 'circle' ? 'rounded-full text-center flex items-center justify-center' : ''
               } ${
                 shape.type === 'sticky_note' ? 'shadow-xl text-slate-900 font-medium' : 'backdrop-blur-2xs'
               } ${
-                isSelected ? 'ring-2 ring-amber-400 shadow-2xl' : 'hover:ring-1 hover:ring-amber-300/60'
+                isSelected ? 'ring-2 ring-amber-400 shadow-2xl' : 'hover:ring-1 hover:ring-amber-300/70'
               }`}
             >
+              {/* Top Rotate & Scale Handle Stem and Button (Girar e Aumentar Tamanho) */}
+              {isSelected && !isDrawingPathMode && (
+                <div 
+                  className="absolute -top-11 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-30"
+                  onMouseDown={(e) => handleStartShapeRotateScale(e, shape)}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shadow-xl cursor-crosshair ring-2 ring-white transition-transform hover:scale-125 group-active:scale-110"
+                    title="Arraste para GIRAR e AUMENTAR/DIMINUIR a forma"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="w-0.5 h-4 bg-amber-400 shadow-xs" />
+
+                  {/* Floating Rotation & Size Tooltip */}
+                  {isTransformingThis && transformMode === 'rotate_scale' && (
+                    <div className="absolute -top-6 whitespace-nowrap bg-slate-950/95 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-400/80 shadow-2xl pointer-events-none">
+                      ↻ {shape.rotation || 0}° | {shape.width}×{shape.height}px
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bottom-Right Corner Resize Handle */}
+              {isSelected && !isDrawingPathMode && (
+                <div
+                  onMouseDown={(e) => handleStartShapeResize(e, shape)}
+                  className="absolute -bottom-2 -right-2 w-5 h-5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full flex items-center justify-center cursor-nwse-resize ring-2 ring-white shadow-xl z-30 transition-transform hover:scale-125"
+                  title="Arraste para redimensionar tamanho da forma"
+                >
+                  <Maximize2 className="w-2.5 h-2.5" />
+                </div>
+              )}
+
               {/* Shape Top Header & Controls */}
               <div className="w-full flex items-center justify-between gap-1 mb-1 pointer-events-auto">
                 <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate max-w-[80%]">
@@ -762,7 +927,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       setEditingShapeId(shape.id);
                       setEditingShapeText(shape.label || '');
                     }}
-                    className="p-1 rounded bg-black/40 hover:bg-black/70 text-white cursor-pointer"
+                    className="p-1 rounded bg-black/50 hover:bg-black/80 text-white cursor-pointer"
                     title="Editar Texto"
                   >
                     <Edit3 className="w-3 h-3" />
@@ -797,14 +962,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSaveShapeText(shape.id)}
-                      className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-extrabold rounded hover:bg-amber-400"
+                      className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-extrabold rounded hover:bg-amber-400 cursor-pointer"
                     >
                       Salvar
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingShapeId(null)}
-                      className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700"
+                      className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700 cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -817,7 +982,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                     setEditingShapeId(shape.id);
                     setEditingShapeText(shape.label || '');
                   }}
-                  className="flex-1 flex items-center justify-center text-center font-bold break-words px-1 overflow-hidden"
+                  className="flex-1 flex items-center justify-center text-center font-bold break-words px-1 overflow-hidden pointer-events-none"
                 >
                   {shape.label || 'Clique 2x para editar'}
                 </div>

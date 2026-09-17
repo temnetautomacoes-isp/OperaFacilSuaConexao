@@ -186,6 +186,7 @@ export interface CanvasShape {
   borderWidth?: number;
   textColor?: string;
   fontSize?: number;
+  rotation?: number; // Ângulo em graus (0-360)
 }
 
 export interface TopologyData {
