@@ -468,15 +468,16 @@ export const supabaseService = {
       id: topo.id || 'topo-main',
       name: topo.name || 'Topologia e Documentação de Rede',
       description: topo.description || '',
-      folders: topo.folders || [],
-      nodes: topo.nodes || [],
-      links: topo.links || [],
-      shapes: topo.shapes || [],
+      folders: Array.isArray(topo.folders) ? topo.folders : [],
+      nodes: Array.isArray(topo.nodes) ? topo.nodes : [],
+      links: Array.isArray(topo.links) ? topo.links : [],
+      shapes: Array.isArray(topo.shapes) ? topo.shapes : [],
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
 
     if (error) {
       console.error('[SupabaseService] Erro ao salvar network_topology:', error);
+      throw error;
     }
   },
 
