@@ -276,9 +276,15 @@ export const RedeModule: React.FC = () => {
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, x, y } : n)));
   };
 
-  // Update Node Properties
+  // Update or Upsert Node Properties
   const handleUpdateNode = (updatedNode: NetworkNode) => {
-    setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
+    setNodes((prev) => {
+      const exists = prev.some((n) => n.id === updatedNode.id);
+      if (exists) {
+        return prev.map((n) => (n.id === updatedNode.id ? updatedNode : n));
+      }
+      return [...prev, updatedNode];
+    });
   };
 
   // Delete Node

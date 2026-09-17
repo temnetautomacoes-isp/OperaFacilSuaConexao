@@ -495,6 +495,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
         allNodes={nodes}
         folders={folders}
         onUpdateNode={onUpdateNode}
+        onAddDevice={onAddDevice}
         onAddNewAssetToSlot={(slotU) => {
           if (rackElevationModalNode) {
             handleOpenAddAssetToRack(rackElevationModalNode, slotU);

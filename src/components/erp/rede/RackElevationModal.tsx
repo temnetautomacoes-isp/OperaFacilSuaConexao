@@ -42,6 +42,7 @@ interface RackElevationModalProps {
   allNodes: NetworkNode[];
   folders?: NetworkFolder[];
   onUpdateNode: (node: NetworkNode) => void;
+  onAddDevice?: (device: any) => void;
   onAddNewAssetToSlot?: (slotU: number) => void;
   onClose: () => void;
 }
@@ -51,6 +52,7 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   allNodes,
   folders = [],
   onUpdateNode,
+  onAddDevice,
   onAddNewAssetToSlot,
   onClose,
 }) => {
@@ -88,18 +90,26 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   };
 
   const handleAddPassiveNode = (passiveNode: Partial<NetworkNode>) => {
+    const parentRack = rackNode;
+    const defaultX = parentRack ? parentRack.x + 130 : 350;
+    const defaultY = parentRack ? parentRack.y + 40 : 250;
+    const targetRackPos = passiveNode.rackPosition || 'U1';
+
     const fullNode: NetworkNode = {
-      id: passiveNode.id || `passive-${Date.now()}`,
+      id: passiveNode.id || `node-pass-${Date.now()}`,
       name: passiveNode.name || 'Elemento Passivo',
+      hostname: `${(passiveNode.name || 'PASSIVO').toLowerCase().replace(/[^a-z0-9]/g, '-')}.local`,
       type: passiveNode.type || 'front_panel_blank',
       category: 'passive',
       vendor: passiveNode.vendor || 'Genérico',
       model: passiveNode.model || 'Passivo',
       folderId: rackNode.folderId,
-      location: `${rackNode.name} (${passiveNode.rackPosition || 'U1'})`,
+      location: `${rackNode.name} (${targetRackPos})`,
       parentRackId: rackNode.id,
-      rackPosition: passiveNode.rackPosition || 'U1',
+      rackPosition: targetRackPos,
       rackUnits: passiveNode.rackUnits || 1,
+      x: defaultX,
+      y: defaultY,
       isPassive: true,
       powerConsumptionWatts: 0,
       powerSupply: 'none',
@@ -113,7 +123,11 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
       ...(passiveNode as any),
     };
 
-    onUpdateNode(fullNode);
+    if (onAddDevice) {
+      onAddDevice(fullNode as any);
+    } else {
+      onUpdateNode(fullNode);
+    }
     setSelectedInspectNodeId(fullNode.id);
   };
 
