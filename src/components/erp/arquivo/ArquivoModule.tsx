@@ -360,6 +360,20 @@ export const ArquivoModule: React.FC = () => {
     return <File className={`${size} text-slate-400`} />;
   };
 
+  // Helper for generating UUID
+  const getUUID = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      try {
+        return crypto.randomUUID();
+      } catch {}
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
   // Actions: Folder Creation
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -367,10 +381,10 @@ export const ArquivoModule: React.FC = () => {
 
     try {
       const newFolder: ExplorerFolder = {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `folder_${Date.now()}`,
+        id: getUUID(),
         name: newFolderName.trim(),
-        parentId: currentFolderId,
-        color: newFolderColor,
+        parentId: currentFolderId || null,
+        color: newFolderColor || '#f59e0b',
         icon: 'folder',
         createdBy: currentUser?.name || currentUser?.username || 'Usuário',
         createdAt: new Date().toISOString(),
@@ -381,8 +395,9 @@ export const ArquivoModule: React.FC = () => {
       setFolders((prev) => [...prev, newFolder]);
       setNewFolderName('');
       setIsNewFolderOpen(false);
-    } catch (err) {
-      alert('Erro ao criar pasta no Supabase.');
+    } catch (err: any) {
+      console.error('Erro ao criar pasta:', err);
+      alert('Erro ao criar pasta no Supabase: ' + (err?.message || err?.error_description || 'Falha na conexão'));
     }
   };
 
@@ -410,8 +425,9 @@ export const ArquivoModule: React.FC = () => {
       setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
       setIsEditFolderOpen(false);
       setEditFolderTarget(null);
-    } catch (err) {
-      alert('Erro ao salvar alterações da pasta.');
+    } catch (err: any) {
+      console.error('Erro ao editar pasta:', err);
+      alert('Erro ao salvar alterações da pasta: ' + (err?.message || 'Falha na conexão'));
     }
   };
 
