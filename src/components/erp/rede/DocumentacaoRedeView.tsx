@@ -32,7 +32,9 @@ import {
   Sparkles,
   Palette,
   X,
-  Pencil
+  Pencil,
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { NetworkFolder, NetworkNode, NetworkLink, LinkType, CanvasShape, LinkStyleConfig } from '../../../types/network';
 import { FolderTreeSidebar } from './FolderTreeSidebar';
@@ -75,8 +77,10 @@ interface DocumentacaoRedeViewProps {
   onUpdateShape?: (shapeOrId: CanvasShape | string, updates?: Partial<CanvasShape>) => void;
   onDeleteShape?: (shapeId: string) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
+  isSavingCloud?: boolean;
   onSaveTopology: () => void;
   onExportJson: () => void;
+  onImportJson?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenCli: (node: NetworkNode) => void;
 }
 
@@ -116,8 +120,10 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   onUpdateShape,
   onDeleteShape,
   onMoveNode,
+  isSavingCloud = false,
   onSaveTopology,
   onExportJson,
+  onImportJson,
   onOpenCli,
 }) => {
   const [viewMode, setViewMode] = useState<'canvas' | 'table'>('canvas');
@@ -379,20 +385,43 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           <button
             type="button"
             onClick={onSaveTopology}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            disabled={isSavingCloud}
+            className={`px-3.5 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
+              isSavingCloud ? 'bg-orange-600 opacity-80 cursor-wait' : 'bg-slate-900 hover:bg-slate-800'
+            }`}
+            title="Salvar e Sincronizar na Nuvem"
           >
-            <Save className="w-3.5 h-3.5 text-orange-400" />
-            Salvar
+            {isSavingCloud ? (
+              <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-orange-400" />
+            )}
+            {isSavingCloud ? 'Salvando na Nuvem...' : 'Salvar'}
           </button>
 
           <button
             type="button"
             onClick={onExportJson}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
-            title="Exportar Documentação como JSON"
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200 flex items-center gap-1 text-xs font-semibold"
+            title="Exportar Documentação como JSON (Backup)"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
+
+          {onImportJson && (
+            <label
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200 flex items-center gap-1 text-xs font-semibold"
+              title="Importar Documentação de Arquivo JSON"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <input
+                type="file"
+                accept=".json"
+                onChange={onImportJson}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
       </div>
 
