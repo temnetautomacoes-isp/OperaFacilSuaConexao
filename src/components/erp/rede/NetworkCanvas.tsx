@@ -879,13 +879,15 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               }`}
             >
               {/* Top Rotate & Scale Handle Stem and Button (Girar e Aumentar Tamanho) */}
-              {isSelected && !isDrawingPathMode && (
+              {!isDrawingPathMode && (
                 <div 
-                  className="absolute -top-11 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-30"
+                  className={`absolute -top-11 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-30 transition-opacity duration-150 ${
+                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
                   onMouseDown={(e) => handleStartShapeRotateScale(e, shape)}
                 >
                   <div
-                    className="w-7 h-7 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shadow-xl cursor-crosshair ring-2 ring-white transition-transform hover:scale-125 group-active:scale-110"
+                    className="w-7 h-7 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shadow-xl cursor-crosshair ring-2 ring-white transition-transform hover:scale-125 active:scale-110"
                     title="Arraste para GIRAR e AUMENTAR/DIMINUIR a forma"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
@@ -902,10 +904,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               )}
 
               {/* Bottom-Right Corner Resize Handle */}
-              {isSelected && !isDrawingPathMode && (
+              {!isDrawingPathMode && (
                 <div
                   onMouseDown={(e) => handleStartShapeResize(e, shape)}
-                  className="absolute -bottom-2 -right-2 w-5 h-5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full flex items-center justify-center cursor-nwse-resize ring-2 ring-white shadow-xl z-30 transition-transform hover:scale-125"
+                  className={`absolute -bottom-2 -right-2 w-5 h-5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full flex items-center justify-center cursor-nwse-resize ring-2 ring-white shadow-xl z-30 transition-all hover:scale-125 ${
+                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
                   title="Arraste para redimensionar tamanho da forma"
                 >
                   <Maximize2 className="w-2.5 h-2.5" />

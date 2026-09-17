@@ -71,7 +71,7 @@ interface DocumentacaoRedeViewProps {
     endPoint?: { x: number; y: number }
   ) => void;
   onAddShape?: (shape: CanvasShape) => void;
-  onUpdateShape?: (shape: CanvasShape) => void;
+  onUpdateShape?: (shapeOrId: CanvasShape | string, updates?: Partial<CanvasShape>) => void;
   onDeleteShape?: (shapeId: string) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
   onSaveTopology: () => void;

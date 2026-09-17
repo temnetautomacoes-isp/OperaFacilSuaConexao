@@ -306,8 +306,18 @@ export const RedeModule: React.FC = () => {
     setShapes((prev) => [...prev, shape]);
   };
 
-  const handleUpdateShape = (updatedShape: CanvasShape) => {
-    setShapes((prev) => prev.map((s) => (s.id === updatedShape.id ? updatedShape : s)));
+  const handleUpdateShape = (shapeOrId: CanvasShape | string, updates?: Partial<CanvasShape>) => {
+    if (typeof shapeOrId === 'string') {
+      const shapeId = shapeOrId;
+      setShapes((prev) =>
+        prev.map((s) => (s.id === shapeId ? { ...s, ...(updates || {}) } : s))
+      );
+    } else {
+      const updatedShape = shapeOrId;
+      setShapes((prev) =>
+        prev.map((s) => (s.id === updatedShape.id ? { ...s, ...updatedShape } : s))
+      );
+    }
   };
 
   const handleDeleteShape = (shapeId: string) => {
