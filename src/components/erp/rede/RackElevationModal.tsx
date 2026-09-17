@@ -32,7 +32,8 @@ import {
   Save,
   Upload,
   Image as ImageIcon,
-  FileText
+  FileText,
+  Cable
 } from 'lucide-react';
 import { NetworkNode, NetworkFolder } from '../../../types/network';
 import { NewPassiveModal } from './NewPassiveModal';
