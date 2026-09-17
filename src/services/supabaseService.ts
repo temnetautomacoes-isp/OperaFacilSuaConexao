@@ -187,6 +187,35 @@ export const supabaseService = {
   },
 
   async saveUser(user: UserAccount): Promise<void> {
+    let finalAvatarUrl = user.avatarUrl;
+    if (finalAvatarUrl && finalAvatarUrl.startsWith('data:image/')) {
+      try {
+        const res = await fetch(finalAvatarUrl);
+        const blob = await res.blob();
+        const ext = finalAvatarUrl.includes('image/png') ? 'png' : 'jpg';
+        const cleanId = (user.id || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filePath = `profiles/avatar_${cleanId}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('operafacil-media')
+          .upload(filePath, blob, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: blob.type || 'image/jpeg',
+          });
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from('operafacil-media')
+            .getPublicUrl(filePath);
+          if (data?.publicUrl) {
+            finalAvatarUrl = data.publicUrl;
+            user.avatarUrl = finalAvatarUrl;
+          }
+        }
+      } catch (uploadErr) {
+        console.warn('[SupabaseService.saveUser] Falha no upload do avatar para Storage, mantendo base64:', uploadErr);
+      }
+    }
+
     await supabase.from('app_users').upsert({
       id: user.id,
       name: user.name,
@@ -195,7 +224,7 @@ export const supabaseService = {
       role: user.role,
       operator_number: user.operatorNumber,
       avatar: user.avatar,
-      avatar_url: user.avatarUrl,
+      avatar_url: finalAvatarUrl,
       phone: user.phone,
       department: user.department,
       position: user.position,

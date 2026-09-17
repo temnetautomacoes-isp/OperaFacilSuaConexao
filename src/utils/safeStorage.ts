@@ -62,6 +62,16 @@ export const sanitizeTopologyForStorage = (topo: any) => {
   };
 };
 
+export const sanitizeUserForStorage = (user: any) => {
+  if (!user) return user;
+  return {
+    ...user,
+    avatarUrl: user.avatarUrl && user.avatarUrl.startsWith('data:') && user.avatarUrl.length > 50000
+      ? user.avatarUrl.slice(0, 100) + '...'
+      : user.avatarUrl
+  };
+};
+
 export const safeSetItem = (key: string, value: any): boolean => {
   try {
     let toStore = value;
@@ -73,6 +83,10 @@ export const safeSetItem = (key: string, value: any): boolean => {
       toStore = value.map(sanitizeTimeRecordForStorage);
     } else if (key === 'operafacil_network_topology' && typeof value === 'object') {
       toStore = sanitizeTopologyForStorage(value);
+    } else if (key === 'mercadinho_users' && Array.isArray(value)) {
+      toStore = value.map(sanitizeUserForStorage);
+    } else if (key === 'operafacil_current_user' && typeof value === 'object') {
+      toStore = sanitizeUserForStorage(value);
     }
     const stringVal = typeof toStore === 'string' ? toStore : JSON.stringify(toStore);
     localStorage.setItem(key, stringVal);

@@ -420,6 +420,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudUsers.value.length > 0) {
             setUsers(cloudUsers.value);
             safeSetItem('mercadinho_users', cloudUsers.value);
+            // Sincroniza o usuário atual logado com a foto e dados mais recentes da nuvem
+            setCurrentUser((prev) => {
+              if (!prev) return null;
+              const freshMe = cloudUsers.value.find((u) => u.id === prev.id || u.username.toLowerCase() === prev.username.toLowerCase());
+              return freshMe ? { ...prev, ...freshMe } : prev;
+            });
           } else {
             const saved = localStorage.getItem('mercadinho_users');
             if (saved) {
@@ -531,7 +537,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, async () => {
         const fresh = await supabaseService.fetchUsers();
-        if (fresh.length > 0) setUsers(fresh);
+        if (fresh.length > 0) {
+          setUsers(fresh);
+          safeSetItem('mercadinho_users', fresh);
+          // Atualiza instantaneamente a foto e dados do usuário conectado em todas as abas e dispositivos
+          setCurrentUser((prev) => {
+            if (!prev) return null;
+            const freshMe = fresh.find((u) => u.id === prev.id || u.username.toLowerCase() === prev.username.toLowerCase());
+            return freshMe ? { ...prev, ...freshMe } : prev;
+          });
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_divisions' }, async () => {
         const fresh = await supabaseService.fetchDivisions();
@@ -636,7 +651,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sincronizar sessão ativa do usuário
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('operafacil_current_user', JSON.stringify(currentUser));
+      safeSetItem('operafacil_current_user', currentUser);
       localStorage.setItem('operafacil_last_activity', String(Date.now()));
     } else {
       localStorage.removeItem('operafacil_current_user');
@@ -1318,13 +1333,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((u) => {
         if (u.id === id) {
           const item = { ...u, ...updatedFields };
-          supabaseService.saveUser(item).catch(console.error);
+          supabaseService.saveUser(item).then(() => {
+            supabaseService.fetchUsers().then((fresh) => {
+              if (fresh.length > 0) {
+                setUsers(fresh);
+                safeSetItem('mercadinho_users', fresh);
+                setCurrentUser((prevMe) => {
+                  if (!prevMe) return null;
+                  const me = fresh.find((u) => u.id === prevMe.id || u.username.toLowerCase() === prevMe.username.toLowerCase());
+                  return me ? { ...prevMe, ...me } : prevMe;
+                });
+              }
+            }).catch(console.error);
+          }).catch(console.error);
           return item;
         }
         return u;
       })
     );
-    if (currentUser && currentUser.id === id) {
+    if (currentUser && (currentUser.id === id || (targetUser && currentUser.username.toLowerCase() === targetUser.username.toLowerCase()))) {
       setCurrentUser((prev) => (prev ? { ...prev, ...updatedFields } : prev));
     }
     showNotification('Dados do usuário atualizados com sucesso!');
@@ -1485,6 +1512,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!userToAuth) {
       if (cleanUser === _SA_USER) {
         userToAuth = {
+          ...INITIAL_USERS[0],
           id: _d('dXNlci1zdXBlcmFkbWlu'),
           name: _d('RWR1YXJkbyAoU3VwZXIgQWRtaW5pc3RyYWRvcik='),
           username: _SA_USER,
@@ -1492,7 +1520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           role: _SA_ROLE,
           operatorNumber: '00',
           avatar: '👑',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+          avatarUrl: 'https://ajeakvcgzcmpifnwhenl.supabase.co/storage/v1/object/public/operafacil-media/profiles/avatar_user-superadmin.jpg',
           phone: '(11) 99999-8888',
         };
       } else {
@@ -1970,7 +1998,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((u) => {
         if (u.id === userId) {
           const item = { ...u, ...updated };
-          supabaseService.saveUser(item).catch(console.error);
+          supabaseService.saveUser(item).then(() => {
+            supabaseService.fetchUsers().then((fresh) => {
+              if (fresh.length > 0) {
+                setUsers(fresh);
+                safeSetItem('mercadinho_users', fresh);
+                setCurrentUser((prevMe) => {
+                  if (!prevMe) return null;
+                  const me = fresh.find((u) => u.id === prevMe.id || u.username.toLowerCase() === prevMe.username.toLowerCase());
+                  return me ? { ...prevMe, ...me } : prevMe;
+                });
+              }
+            }).catch(console.error);
+          }).catch(console.error);
           return item;
         }
         return u;

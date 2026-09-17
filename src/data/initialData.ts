@@ -46,7 +46,7 @@ export const INITIAL_USERS: UserAccount[] = [
     role: _d('c3VwZXJhZG1pbg==') as 'superadmin',
     operatorNumber: '00',
     avatar: '👑',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+    avatarUrl: 'https://ajeakvcgzcmpifnwhenl.supabase.co/storage/v1/object/public/operafacil-media/profiles/avatar_user-superadmin.jpg',
     phone: '(11) 99999-8888',
     department: 'Diretoria & Operações',
     position: 'Administrador Geral ISP',
