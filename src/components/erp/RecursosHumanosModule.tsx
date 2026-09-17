@@ -4562,11 +4562,17 @@ export const RecursosHumanosModule: React.FC = () => {
 
                       {/* Row 4 */}
                       <div className="grid grid-cols-12 divide-x divide-black">
-                        <div className="col-span-7 px-2 py-0.5">
-                          <span className="font-bold">Nome: </span>
-                          <span className="font-bold uppercase">
-                            {targetEmp?.registrationCode || targetEmp?.operatorNumber || '1'} - {targetEmp?.name}
-                          </span>
+                        <div className="col-span-7 px-2 py-0.5 flex items-center justify-between gap-2">
+                          <div className="truncate">
+                            <span className="font-bold">Nome: </span>
+                            <span className="font-bold uppercase">
+                              {targetEmp?.registrationCode || targetEmp?.operatorNumber || '1'} - {targetEmp?.name}
+                            </span>
+                          </div>
+                          <div className="shrink-0 text-[10px]">
+                            <span className="font-bold">CPF: </span>
+                            <span className="font-mono">{targetEmp?.cpf || 'Não informado'}</span>
+                          </div>
                         </div>
                         <div className="col-span-5 px-2 py-0.5">
                           <span className="font-bold">Horário: </span>
@@ -4587,31 +4593,30 @@ export const RecursosHumanosModule: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Table of Punches matching Image 3 structure */}
+                    {/* Table of Punches occupying full width (without daily signature column) */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-center text-[10px] border-collapse border border-black">
                         <thead>
                           <tr className="bg-slate-100 text-black">
-                            <th rowSpan={2} className="border border-black px-1 py-1 w-7 font-bold">Dia</th>
-                            <th rowSpan={2} className="border border-black px-1 py-1 w-9 font-bold">Sem</th>
-                            <th rowSpan={2} className="border border-black px-1 py-1 w-12 font-bold">Entrada</th>
-                            <th colSpan={2} className="border border-black px-1 py-1 font-bold">Intervalo</th>
-                            <th rowSpan={2} className="border border-black px-1 py-1 w-12 font-bold">Saída</th>
-                            <th colSpan={3} className="border border-black px-1 py-1 font-bold">Hora Extra</th>
-                            <th rowSpan={2} className="border border-black px-2 py-1 font-bold min-w-[140px]">Assinatura</th>
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-[6%] font-bold">Dia</th>
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-[7%] font-bold">Sem</th>
+                            <th rowSpan={2} className="border border-black px-2 py-1 w-[15%] font-bold">Entrada</th>
+                            <th colSpan={2} className="border border-black px-2 py-1 w-[30%] font-bold">Intervalo</th>
+                            <th rowSpan={2} className="border border-black px-2 py-1 w-[15%] font-bold">Saída</th>
+                            <th colSpan={3} className="border border-black px-2 py-1 w-[27%] font-bold">Hora Extra</th>
                           </tr>
                           <tr className="bg-slate-100 text-black">
-                            <th className="border border-black px-1 py-0.5 w-12 font-bold">Saída</th>
-                            <th className="border border-black px-1 py-0.5 w-12 font-bold">Entrada</th>
-                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Entrada</th>
-                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Saída</th>
-                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Nº Horas</th>
+                            <th className="border border-black px-1 py-0.5 w-[15%] font-bold">Saída</th>
+                            <th className="border border-black px-1 py-0.5 w-[15%] font-bold">Entrada</th>
+                            <th className="border border-black px-1 py-0.5 w-[9%] font-bold">Entrada</th>
+                            <th className="border border-black px-1 py-0.5 w-[9%] font-bold">Saída</th>
+                            <th className="border border-black px-1 py-0.5 w-[9%] font-bold">Nº Horas</th>
                           </tr>
                         </thead>
                         <tbody>
                           {daysToRender.length === 0 ? (
                             <tr>
-                              <td colSpan={10} className="border border-black py-4 text-center text-slate-500">
+                              <td colSpan={9} className="border border-black py-4 text-center text-slate-500">
                                 Nenhum dia selecionado para impressão.
                               </td>
                             </tr>
@@ -4630,16 +4635,16 @@ export const RecursosHumanosModule: React.FC = () => {
                                   <td className="border border-black font-semibold text-center uppercase">
                                     {weekDay}
                                   </td>
-                                  <td className="border border-black font-mono text-center">
+                                  <td className="border border-black font-mono text-center font-bold">
                                     {record?.entry1 || ''}
                                   </td>
-                                  <td className="border border-black font-mono text-center">
+                                  <td className="border border-black font-mono text-center font-bold">
                                     {record?.exit1 || ''}
                                   </td>
-                                  <td className="border border-black font-mono text-center">
+                                  <td className="border border-black font-mono text-center font-bold">
                                     {record?.entry2 || ''}
                                   </td>
-                                  <td className="border border-black font-mono text-center">
+                                  <td className="border border-black font-mono text-center font-bold">
                                     {record?.exit2 || ''}
                                   </td>
                                   <td className="border border-black font-mono text-center">
@@ -4650,9 +4655,6 @@ export const RecursosHumanosModule: React.FC = () => {
                                   </td>
                                   <td className="border border-black font-mono text-center font-bold">
                                     {record?.extraHours ? `${record.extraHours}h` : ''}
-                                  </td>
-                                  <td className="border border-black text-center font-serif text-[11px] text-slate-700 italic">
-                                    {record && (record.entry1 || record.exit1) ? '' : ''}
                                   </td>
                                 </tr>
                               );
@@ -4710,25 +4712,30 @@ export const RecursosHumanosModule: React.FC = () => {
                     )}
 
                     {/* Legal Note & Acknowledgment matching Image 3 */}
-                    <div className="space-y-1 pt-1 text-[10px] text-black">
+                    <div className="space-y-1.5 pt-2 text-[10px] text-black">
                       <p className="font-semibold">
                         Obs.: Substitui o Quadro de Horário de Trabalho, de acordo com o disposto na Portaria Ministerial nº 3162 de 08/09/1982
                       </p>
-                      <p className="font-semibold">
-                        Reconheço a exatidão destas anotações. Data: _____ / _____ / _________
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <span>Reconheço a exatidão destas anotações. Data:</span>
+                        <span className="inline-block border-b border-black w-14 pb-0.5 text-center">&nbsp;</span>
+                        <span>/</span>
+                        <span className="inline-block border-b border-black w-14 pb-0.5 text-center">&nbsp;</span>
+                        <span>/</span>
+                        <span className="inline-block border-b border-black w-24 pb-0.5 text-center">&nbsp;</span>
                       </p>
                     </div>
 
-                    {/* Dual Signatures matching Image 3 */}
-                    <div className="pt-6 grid grid-cols-2 gap-16 text-center text-xs text-black">
+                    {/* Dual Signatures matching user request */}
+                    <div className="pt-8 grid grid-cols-2 gap-20 text-center text-xs text-black">
                       <div>
                         <div className="border-t border-black pt-1">
-                          <span className="font-bold text-[11px] uppercase">Visto chefia</span>
+                          <span className="font-bold text-[11px] uppercase tracking-wider">Visto Supervisor</span>
                         </div>
                       </div>
                       <div>
                         <div className="border-t border-black pt-1">
-                          <span className="font-bold text-[11px] uppercase">Visto funcionário</span>
+                          <span className="font-bold text-[11px] uppercase tracking-wider">Visto Colaborador</span>
                         </div>
                       </div>
                     </div>
