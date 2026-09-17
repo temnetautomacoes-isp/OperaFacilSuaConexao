@@ -64,11 +64,13 @@ export const ConfiguracoesModule: React.FC = () => {
   const [receiptFooter, setReceiptFooter] = useState(settings.receiptFooter);
   const [logoUrl, setLogoUrl] = useState<string>(settings.logoUrl || '');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const isDirtyRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sincroniza campos do formulário quando as configurações forem carregadas da nuvem
+  // Sincroniza campos do formulário apenas se o usuário ainda NÃO tiver modificado os campos na tela
   useEffect(() => {
-    if (isUploadingLogo) return;
+    if (isUploadingLogo || isSaving || isDirtyRef.current) return;
     setName(settings.name || '');
     setSlogan(settings.slogan || '');
     setCnpj(settings.cnpj || '');
@@ -76,7 +78,12 @@ export const ConfiguracoesModule: React.FC = () => {
     setAddress(settings.address || '');
     setReceiptFooter(settings.receiptFooter || '');
     setLogoUrl(settings.logoUrl || '');
-  }, [settings, isUploadingLogo]);
+  }, [settings, isUploadingLogo, isSaving]);
+
+  const handleFieldChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    isDirtyRef.current = true;
+    setter(e.target.value);
+  };
 
   // User Management state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -177,9 +184,10 @@ export const ConfiguracoesModule: React.FC = () => {
     showNotification('Logotipo da empresa removido com sucesso.');
   };
 
-  const handleSaveStoreInfo = (e: React.FormEvent) => {
+  const handleSaveStoreInfo = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
+    setIsSaving(true);
+    const newSettings: Partial<StoreSettings> = {
       name: name.trim(),
       slogan: slogan.trim(),
       cnpj: cnpj.trim(),
@@ -187,7 +195,21 @@ export const ConfiguracoesModule: React.FC = () => {
       address: address.trim(),
       receiptFooter: receiptFooter.trim(),
       logoUrl: logoUrl.trim() || undefined,
-    });
+    };
+
+    try {
+      // 1. Salva diretamente no banco Supabase
+      await supabaseService.saveCompanySettings(newSettings);
+      // 2. Atualiza o AppContext localmente
+      updateSettings(newSettings);
+      isDirtyRef.current = false;
+      showNotification('Informações da empresa salvas na nuvem com sucesso!');
+    } catch (err) {
+      console.error('Erro ao salvar dados da empresa no Supabase:', err);
+      showNotification('Erro ao salvar dados no Supabase. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleExportBackup = () => {
@@ -513,7 +535,7 @@ export const ConfiguracoesModule: React.FC = () => {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={handleFieldChange(setName)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-semibold text-slate-900"
                   required
                 />
@@ -527,7 +549,7 @@ export const ConfiguracoesModule: React.FC = () => {
                 <input
                   type="text"
                   value={slogan}
-                  onChange={(e) => setSlogan(e.target.value)}
+                  onChange={handleFieldChange(setSlogan)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-800 italic"
                   required
                 />
@@ -540,7 +562,7 @@ export const ConfiguracoesModule: React.FC = () => {
                 <input
                   type="text"
                   value={cnpj}
-                  onChange={(e) => setCnpj(e.target.value)}
+                  onChange={handleFieldChange(setCnpj)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 font-mono text-slate-700"
                 />
               </div>
@@ -552,7 +574,7 @@ export const ConfiguracoesModule: React.FC = () => {
                 <input
                   type="text"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={handleFieldChange(setPhone)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-700"
                 />
               </div>
@@ -565,7 +587,7 @@ export const ConfiguracoesModule: React.FC = () => {
               <input
                 type="text"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={handleFieldChange(setAddress)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-700"
               />
             </div>
@@ -577,7 +599,7 @@ export const ConfiguracoesModule: React.FC = () => {
               <input
                 type="text"
                 value={receiptFooter}
-                onChange={(e) => setReceiptFooter(e.target.value)}
+                onChange={handleFieldChange(setReceiptFooter)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-slate-700 italic"
               />
             </div>
@@ -585,10 +607,20 @@ export const ConfiguracoesModule: React.FC = () => {
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                disabled={isSaving}
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                <span>Salvar Alterações</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Alterações</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
