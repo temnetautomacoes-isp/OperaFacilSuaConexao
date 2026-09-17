@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FolderTree, 
   FlaskConical, 
-  CheckCircle2 
+  CheckCircle2,
+  Cloud,
+  RotateCw
 } from 'lucide-react';
 import { NetworkNode, NetworkLink, SimulationPacket, LinkType, TopologyData, NetworkFolder, CanvasShape, LinkStyleConfig } from '../../../types/network';
 import { INITIAL_TOPOLOGY, INITIAL_FOLDERS, DEVICE_CATALOG } from './initialNetworkData';
@@ -19,7 +21,10 @@ export const RedeModule: React.FC = () => {
   const isInitialLoad = useRef(true);
 
   const isCloudLoaded = useRef(false);
+  const isApplyingRemoteUpdate = useRef(false);
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
   const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
   // Helper to purge legacy example/mock data from localStorage
   const isMockData = (parsed: any): boolean => {
@@ -154,7 +159,7 @@ export const RedeModule: React.FC = () => {
 
     loadCloudTopology();
 
-    // Supabase Realtime channel
+    // Supabase Realtime channel for live multi-user sync
     const channel = supabase
       .channel('realtime-network-topology')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'network_topology' }, async () => {
@@ -163,11 +168,17 @@ export const RedeModule: React.FC = () => {
           if (fresh && !isMockData(fresh)) {
             const hasAny = (fresh.folders?.length || 0) > 0 || (fresh.nodes?.length || 0) > 0 || (fresh.links?.length || 0) > 0;
             if (hasAny) {
+              // Flag to avoid bouncing the incoming update right back to Supabase
+              isApplyingRemoteUpdate.current = true;
               setFolders(fresh.folders || []);
               setNodes(fresh.nodes || []);
               setLinks(fresh.links || []);
-              if (fresh.shapes) setShapes(fresh.shapes);
+              setShapes(fresh.shapes || []);
               safeSetItem('operafacil_network_topology', fresh);
+              setLastSyncTime(new Date());
+              setTimeout(() => {
+                isApplyingRemoteUpdate.current = false;
+              }, 300);
             }
           }
         } catch (e) {
@@ -181,9 +192,9 @@ export const RedeModule: React.FC = () => {
     };
   }, []);
 
-  // Automatic persistence (localStorage + Supabase Cloud) ONLY after initial cloud load completes
+  // Automatic persistence (localStorage + Supabase Cloud) debounced & only for local user edits
   useEffect(() => {
-    if (!isCloudLoaded.current) {
+    if (!isCloudLoaded.current || isApplyingRemoteUpdate.current) {
       return;
     }
 
@@ -200,9 +211,53 @@ export const RedeModule: React.FC = () => {
     };
 
     safeSetItem('operafacil_network_topology', topo);
-    // Auto-save to cloud
-    supabaseService.saveNetworkTopology(topo).catch(console.error);
+
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+    }
+
+    setIsSavingCloud(true);
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await supabaseService.saveNetworkTopology(topo);
+        setLastSyncTime(new Date());
+      } catch (err) {
+        console.error('[RedeModule] Erro ao salvar topologia:', err);
+      } finally {
+        setIsSavingCloud(false);
+      }
+    }, 600);
+
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+      }
+    };
   }, [folders, nodes, links, shapes]);
+
+  // Manual refresh from cloud
+  const handleManualRefresh = async () => {
+    setIsSavingCloud(true);
+    try {
+      const fresh = await supabaseService.fetchNetworkTopology();
+      if (fresh) {
+        isApplyingRemoteUpdate.current = true;
+        setFolders(fresh.folders || []);
+        setNodes(fresh.nodes || []);
+        setLinks(fresh.links || []);
+        setShapes(fresh.shapes || []);
+        safeSetItem('operafacil_network_topology', fresh);
+        setLastSyncTime(new Date());
+        setTimeout(() => {
+          isApplyingRemoteUpdate.current = false;
+        }, 300);
+      }
+    } catch (err) {
+      console.error('Erro ao recarregar dados do Supabase:', err);
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
 
   // Save topology manually (with visual toast and cloud confirmation)
   const handleSaveTopology = async () => {
@@ -221,6 +276,7 @@ export const RedeModule: React.FC = () => {
     safeSetItem('operafacil_network_topology', data);
     try {
       await supabaseService.saveNetworkTopology(data);
+      setLastSyncTime(new Date());
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 2500);
     } catch (err) {
@@ -346,67 +402,23 @@ export const RedeModule: React.FC = () => {
 
   // Shape Handlers
   const handleAddShape = (shape: CanvasShape) => {
-    setShapes((prev) => {
-      const updated = [...prev, shape];
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes,
-        links,
-        shapes: updated,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return updated;
-    });
+    setShapes((prev) => [...prev, shape]);
   };
 
   const handleUpdateShape = (shapeOrId: CanvasShape | string, updates?: Partial<CanvasShape>) => {
     setShapes((prev) => {
-      let updated: CanvasShape[];
       if (typeof shapeOrId === 'string') {
         const shapeId = shapeOrId;
-        updated = prev.map((s) => (s.id === shapeId ? { ...s, ...(updates || {}) } : s));
+        return prev.map((s) => (s.id === shapeId ? { ...s, ...(updates || {}) } : s));
       } else {
         const updatedShape = shapeOrId;
-        updated = prev.map((s) => (s.id === updatedShape.id ? { ...s, ...updatedShape } : s));
+        return prev.map((s) => (s.id === updatedShape.id ? { ...s, ...updatedShape } : s));
       }
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes,
-        links,
-        shapes: updated,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return updated;
     });
   };
 
   const handleDeleteShape = (shapeId: string) => {
-    setShapes((prev) => {
-      const updated = prev.filter((s) => s.id !== shapeId);
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes,
-        links,
-        shapes: updated,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return updated;
-    });
+    setShapes((prev) => prev.filter((s) => s.id !== shapeId));
   };
 
   // Move Node
@@ -415,93 +427,30 @@ export const RedeModule: React.FC = () => {
   };
 
   // Update or Upsert Node Properties
-  // Update or Upsert Node Properties
   const handleUpdateNode = (updatedNode: NetworkNode) => {
     setNodes((prev) => {
       const exists = prev.some((n) => n.id === updatedNode.id);
-      const nextNodes = exists
+      return exists
         ? prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
         : [...prev, updatedNode];
-      
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes: nextNodes,
-        links,
-        shapes,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return nextNodes;
     });
   };
 
   // Delete Node
   const handleDeleteNode = (nodeId: string) => {
-    setNodes((prevNodes) => {
-      const nextNodes = prevNodes.filter((n) => n.id !== nodeId);
-      setLinks((prevLinks) => {
-        const nextLinks = prevLinks.filter((l) => l.sourceNodeId !== nodeId && l.targetNodeId !== nodeId);
-        const topo: TopologyData = {
-          id: 'topo-main',
-          name: 'Topologia e Documentação de Rede',
-          updatedAt: new Date().toISOString(),
-          gridSnap: true,
-          folders,
-          nodes: nextNodes,
-          links: nextLinks,
-          shapes,
-        };
-        safeSetItem('operafacil_network_topology', topo);
-        supabaseService.saveNetworkTopology(topo).catch(console.error);
-        return nextLinks;
-      });
-      return nextNodes;
-    });
+    setNodes((prevNodes) => prevNodes.filter((n) => n.id !== nodeId));
+    setLinks((prevLinks) => prevLinks.filter((l) => l.sourceNodeId !== nodeId && l.targetNodeId !== nodeId));
     setSelectedNodeId(null);
   };
 
   // Update Link Properties
   const handleUpdateLink = (updatedLink: NetworkLink) => {
-    setLinks((prev) => {
-      const nextLinks = prev.map((l) => (l.id === updatedLink.id ? updatedLink : l));
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes,
-        links: nextLinks,
-        shapes,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return nextLinks;
-    });
+    setLinks((prev) => prev.map((l) => (l.id === updatedLink.id ? updatedLink : l)));
   };
 
   // Delete Link
   const handleDeleteLink = (linkId: string) => {
-    setLinks((prev) => {
-      const nextLinks = prev.filter((l) => l.id !== linkId);
-      const topo: TopologyData = {
-        id: 'topo-main',
-        name: 'Topologia e Documentação de Rede',
-        updatedAt: new Date().toISOString(),
-        gridSnap: true,
-        folders,
-        nodes,
-        links: nextLinks,
-        shapes,
-      };
-      safeSetItem('operafacil_network_topology', topo);
-      supabaseService.saveNetworkTopology(topo).catch(console.error);
-      return nextLinks;
-    });
+    setLinks((prev) => prev.filter((l) => l.id !== linkId));
     setSelectedLinkId(null);
   };
 
@@ -756,9 +705,31 @@ export const RedeModule: React.FC = () => {
           </button>
         </div>
 
-        {/* Right Info */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-[11px] font-bold text-slate-500 hidden lg:inline-block">
+        {/* Right Info: Live Supabase Status & Refresh */}
+        <div className="flex items-center gap-2.5 text-xs">
+          {/* Realtime Supabase Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-colors ${
+              isSavingCloud
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}
+            title="Sincronização em tempo real via Supabase"
+          >
+            <Cloud className={`w-3.5 h-3.5 ${isSavingCloud ? 'animate-spin text-amber-500' : 'text-emerald-500'}`} />
+            <span>{isSavingCloud ? 'Sincronizando Nuvem...' : 'Supabase Nuvem (Tempo Real)'}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            title="Recarregar dados mais recentes da nuvem"
+          >
+            <RotateCw className={`w-4 h-4 ${isSavingCloud ? 'animate-spin' : ''}`} />
+          </button>
+
+          <span className="text-[11px] font-bold text-slate-500 hidden lg:inline-block border-l border-slate-200 pl-2">
             {folders.length} Pastas • {nodes.length} Dispositivos • {links.length} Enlaces
           </span>
         </div>
