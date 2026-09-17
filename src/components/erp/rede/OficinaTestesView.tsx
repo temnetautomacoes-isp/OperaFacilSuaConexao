@@ -273,6 +273,7 @@ export const OficinaTestesView: React.FC<OficinaTestesViewProps> = ({
           onSelectLink={onSelectLink}
           onMoveNode={onMoveNode}
           onAddLink={onAddLink}
+          onDeleteLink={onDeleteLink}
           isSimulationMode={isSimulationMode}
           activePackets={activePackets}
           zoom={zoom}

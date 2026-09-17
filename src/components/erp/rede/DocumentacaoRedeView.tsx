@@ -273,6 +273,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             }}
             onMoveNode={onMoveNode}
             onAddLink={onAddLink}
+            onDeleteLink={onDeleteLink}
             isSimulationMode={false}
             activePackets={[]}
             zoom={zoom}

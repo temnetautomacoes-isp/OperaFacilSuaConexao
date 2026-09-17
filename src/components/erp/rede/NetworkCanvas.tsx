@@ -41,6 +41,7 @@ interface NetworkCanvasProps {
   onSelectLink: (linkId: string | null) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
   onAddLink: (sourceNodeId: string, targetNodeId: string, linkType: LinkType) => void;
+  onDeleteLink?: (linkId: string) => void;
   isSimulationMode: boolean;
   activePackets: SimulationPacket[];
   zoom: number;
@@ -51,6 +52,17 @@ interface NetworkCanvasProps {
   isConnectingMode: boolean;
   onOpenRackElevation?: (rackNode: NetworkNode) => void;
 }
+
+const LINK_CONFIG: Record<string, { color: string; label: string; strokeDash: string; width: number }> = {
+  fiber_sm: { color: '#38bdf8', label: 'Fibra 10G', strokeDash: 'none', width: 3 },
+  fiber_mm: { color: '#06b6d4', label: 'Fibra MM', strokeDash: 'none', width: 3 },
+  fiber_drop: { color: '#c084fc', label: 'Drop FTTH', strokeDash: 'none', width: 2.5 },
+  dac_10g: { color: '#eab308', label: 'DAC 10G', strokeDash: 'none', width: 3.5 },
+  utp_cat6: { color: '#34d399', label: 'UTP Cat6', strokeDash: 'none', width: 2.8 },
+  wireless_ptp: { color: '#fb923c', label: 'Rádio PTP', strokeDash: '6,5', width: 3 },
+  coaxial: { color: '#a3e635', label: 'Coaxial', strokeDash: 'none', width: 2.5 },
+  power_cable: { color: '#f43f5e', label: 'Energia', strokeDash: 'none', width: 3 },
+};
 
 export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   nodes,
@@ -63,6 +75,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   onSelectLink,
   onMoveNode,
   onAddLink,
+  onDeleteLink,
   isSimulationMode,
   activePackets,
   zoom,
@@ -89,7 +102,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Connecting cable state (Drag to Connect)
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
-  const [draggedCableStartPos, setDraggedCableStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [draggedCableStartPos, setDraggedCableStartPos] = useState<{ x: number; y: number; side?: string } | null>(null);
   const [hoveredTargetNodeId, setHoveredTargetNodeId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -123,6 +136,59 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     };
   }, [zoom, panOffset, onPanChange, onZoomChange]);
 
+  // Calculate Port Coordinates for clean Mindmap connections
+  const getPortCoordinates = (node: NetworkNode, targetX: number, targetY: number) => {
+    const nodeCenterX = node.x + 45;
+    const nodeCenterY = node.y + 28;
+    const dx = targetX - nodeCenterX;
+    const dy = targetY - nodeCenterY;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (dx >= 0) {
+        return { x: node.x + 65, y: node.y + 28, dir: 'right' };
+      } else {
+        return { x: node.x + 25, y: node.y + 28, dir: 'left' };
+      }
+    } else {
+      if (dy >= 0) {
+        return { x: node.x + 45, y: node.y + 56, dir: 'bottom' };
+      } else {
+        return { x: node.x + 45, y: node.y, dir: 'top' };
+      }
+    }
+  };
+
+  // Calculate smooth Mindmap / Flowchart S-curve path
+  const calculateMindmapPath = (
+    x1: number,
+    y1: number,
+    dir1: string,
+    x2: number,
+    y2: number,
+    dir2: string
+  ) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const curvature = Math.max(40, Math.min(180, Math.hypot(dx, dy) * 0.45));
+
+    let cp1x = x1;
+    let cp1y = y1;
+    let cp2x = x2;
+    let cp2y = y2;
+
+    if (dir1 === 'right') cp1x += curvature;
+    else if (dir1 === 'left') cp1x -= curvature;
+    else if (dir1 === 'bottom') cp1y += curvature;
+    else if (dir1 === 'top') cp1y -= curvature;
+
+    if (dir2 === 'right') cp2x += curvature;
+    else if (dir2 === 'left') cp2x -= curvature;
+    else if (dir2 === 'bottom') cp2y += curvature;
+    else if (dir2 === 'top') cp2y -= curvature;
+
+    return `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+  };
+
   // Global window listeners for drag & pan & cable dragging
   useEffect(() => {
     if (!draggingNodeId && !isPanning && !connectingSourceId) return;
@@ -136,10 +202,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         const curY = (e.clientY - rect.top - panOffset.y) / zoom;
         setMousePos({ x: Math.round(curX), y: Math.round(curY) });
 
-        // Detect hovered node
+        // Generous target node detection (radial and bounding box)
         const hovered = visibleNodes.find(n => {
           if (n.id === connectingSourceId) return false;
-          return curX >= n.x - 20 && curX <= n.x + 110 && curY >= n.y - 20 && curY <= n.y + 110;
+          const withinBox = curX >= n.x - 25 && curX <= n.x + 115 && curY >= n.y - 25 && curY <= n.y + 125;
+          const withinRadius = Math.hypot(curX - (n.x + 45), curY - (n.y + 28)) <= 80;
+          return withinBox || withinRadius;
         });
         setHoveredTargetNodeId(hovered ? hovered.id : null);
       }
@@ -160,7 +228,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         newX = Math.round(newX / 20) * 20;
         newY = Math.round(newY / 20) * 20;
 
-        // Unrestricted movement: allow placing items anywhere in the 2D infinite workspace
         onMoveNode(draggingNodeId, newX, newY);
       }
     };
@@ -176,13 +243,18 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           const curY = (e.clientY - rect.top - panOffset.y) / zoom;
 
           // Connect if dropped over target node
-          const target = visibleNodes.find(n => {
-            if (n.id === connectingSourceId) return false;
-            return curX >= n.x - 25 && curX <= n.x + 115 && curY >= n.y - 25 && curY <= n.y + 115;
-          });
+          let target = hoveredTargetNodeId ? visibleNodes.find(n => n.id === hoveredTargetNodeId) : null;
+          if (!target) {
+            target = visibleNodes.find(n => {
+              if (n.id === connectingSourceId) return false;
+              const withinBox = curX >= n.x - 30 && curX <= n.x + 120 && curY >= n.y - 30 && curY <= n.y + 130;
+              const withinRadius = Math.hypot(curX - (n.x + 45), curY - (n.y + 28)) <= 85;
+              return withinBox || withinRadius;
+            }) || null;
+          }
 
-          if (target) {
-            onAddLink(connectingSourceId, target.id, selectedCableType as LinkType);
+          if (target && target.id !== connectingSourceId) {
+            onAddLink(connectingSourceId, target.id, (selectedCableType || 'fiber_sm') as LinkType);
           }
         }
         setConnectingSourceId(null);
@@ -208,7 +280,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       window.removeEventListener('mouseup', onWindowMouseUp);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [draggingNodeId, isPanning, connectingSourceId, visibleNodes, selectedCableType, onAddLink, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
+  }, [draggingNodeId, isPanning, connectingSourceId, hoveredTargetNodeId, visibleNodes, selectedCableType, onAddLink, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
 
   // Handle Canvas Mouse Down (Pan canvas or deselect)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -245,15 +317,30 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   };
 
   // Start Cable Drag from Connector Dot
-  const handleStartCableDrag = (e: React.MouseEvent, nodeId: string, side: 'right' | 'left' = 'right') => {
+  const handleStartCableDrag = (e: React.MouseEvent, nodeId: string, side: 'right' | 'left' | 'top' | 'bottom' = 'right') => {
     e.stopPropagation();
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
     setConnectingSourceId(nodeId);
-    const startX = side === 'right' ? node.x + 65 : node.x + 25;
-    const startY = node.y + 28;
-    setDraggedCableStartPos({ x: startX, y: startY });
+    let startX = node.x + 45;
+    let startY = node.y + 28;
+
+    if (side === 'right') {
+      startX = node.x + 65;
+      startY = node.y + 28;
+    } else if (side === 'left') {
+      startX = node.x + 25;
+      startY = node.y + 28;
+    } else if (side === 'bottom') {
+      startX = node.x + 45;
+      startY = node.y + 56;
+    } else if (side === 'top') {
+      startX = node.x + 45;
+      startY = node.y;
+    }
+
+    setDraggedCableStartPos({ x: startX, y: startY, side });
     setMousePos({ x: startX, y: startY });
   };
 
@@ -264,7 +351,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     // If currently in connection mode, clicking this node completes the link
     if (connectingSourceId) {
       if (connectingSourceId !== nodeId) {
-        onAddLink(connectingSourceId, nodeId, selectedCableType as LinkType);
+        onAddLink(connectingSourceId, nodeId, (selectedCableType || 'fiber_sm') as LinkType);
       }
       setConnectingSourceId(null);
       setDraggedCableStartPos(null);
@@ -297,7 +384,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   const handleNodeMouseUp = (e: React.MouseEvent, targetNodeId: string) => {
     if (connectingSourceId && connectingSourceId !== targetNodeId) {
       e.stopPropagation();
-      onAddLink(connectingSourceId, targetNodeId, selectedCableType as LinkType);
+      onAddLink(connectingSourceId, targetNodeId, (selectedCableType || 'fiber_sm') as LinkType);
       setConnectingSourceId(null);
       setDraggedCableStartPos(null);
       setHoveredTargetNodeId(null);
@@ -323,20 +410,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Get Cable Link Visual Styling
   const getLinkStroke = (type: LinkType) => {
-    switch (type) {
-      case 'fiber_sm':
-        return { color: '#3b82f6', dash: 'none', width: 3.5 }; // Azul vibrante
-      case 'fiber_drop':
-        return { color: '#9333ea', dash: 'none', width: 2.5 }; // Roxo
-      case 'utp_cat6':
-        return { color: '#10b981', dash: 'none', width: 3 }; // Verde esmeralda
-      case 'wireless_ptp':
-        return { color: '#f59e0b', dash: '6,6', width: 3 }; // Amarelo tracejado
-      case 'coaxial':
-        return { color: '#06b6d4', dash: 'none', width: 3 };
-      default:
-        return { color: '#64748b', dash: 'none', width: 2.5 };
-    }
+    return LINK_CONFIG[type] || { color: '#64748b', label: 'Cabo', strokeDash: 'none', width: 2.5 };
   };
 
   // Render Device Stencil Icon
@@ -415,6 +489,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   };
 
   const connectingSourceNode = nodes.find(n => n.id === connectingSourceId);
+  const hoveredTargetNode = hoveredTargetNodeId ? nodes.find(n => n.id === hoveredTargetNodeId) : null;
 
   return (
     <div
@@ -422,14 +497,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0e1726] cursor-${isPanning ? 'grabbing' : 'default'} select-none`}
+      className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] cursor-${isPanning ? 'grabbing' : 'default'} select-none`}
       style={{
-        backgroundImage: `radial-gradient(circle, #2d3748 1px, transparent 1px)`,
+        backgroundImage: `radial-gradient(circle, #1e293b 1.2px, transparent 1.2px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
       }}
     >
-      {/* SVG Canvas Layer for Links, Cables and Packet Animations */}
+      {/* SVG Canvas Layer for Mindmap / Diagram Links & Cables */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
@@ -438,13 +513,54 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         }}
       >
         <defs>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+          <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
+          <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.4" />
+          </filter>
+
+          {/* SVG Arrow Markers for each Cable Type in Mindmap Style */}
+          {Object.entries(LINK_CONFIG).map(([type, cfg]) => (
+            <marker
+              key={type}
+              id={`arrow-${type}`}
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill={cfg.color} />
+            </marker>
+          ))}
+          <marker
+            id="arrow-default"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#94a3b8" />
+          </marker>
+          <marker
+            id="arrow-hover"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            orient="auto"
+          >
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#10b981" />
+          </marker>
         </defs>
 
-        {/* Cable Links */}
+        {/* Cable Links in Mindmap / Flow Diagram Style */}
         {visibleLinks.map((link) => {
           const src = visibleNodes.find((n) => n.id === link.sourceNodeId);
           const tgt = visibleNodes.find((n) => n.id === link.targetNodeId);
@@ -453,95 +569,196 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           const isSelected = selectedLinkId === link.id;
           const stroke = getLinkStroke(link.type);
 
-          const x1 = src.x + 45;
-          const y1 = src.y + 28;
-          const x2 = tgt.x + 45;
-          const y2 = tgt.y + 28;
+          const srcPort = getPortCoordinates(src, tgt.x + 45, tgt.y + 28);
+          const tgtPort = getPortCoordinates(tgt, src.x + 45, src.y + 28);
 
-          // Orthogonal or smooth curve path
-          const midX = (x1 + x2) / 2;
-          const midY = (y1 + y2) / 2;
-          const pathD = `M ${x1} ${y1} Q ${midX} ${y1} ${midX} ${midY} T ${x2} ${y2}`;
+          const pathD = calculateMindmapPath(
+            srcPort.x,
+            srcPort.y,
+            srcPort.dir,
+            tgtPort.x,
+            tgtPort.y,
+            tgtPort.dir
+          );
+
+          const midX = (srcPort.x + tgtPort.x) / 2;
+          const midY = (srcPort.y + tgtPort.y) / 2;
 
           return (
-            <g key={link.id} className="cursor-pointer pointer-events-auto" onClick={(e) => { e.stopPropagation(); onSelectLink(link.id); }}>
-              {/* Hitbox */}
+            <g key={link.id} className="cursor-pointer pointer-events-auto group" onClick={(e) => { e.stopPropagation(); onSelectLink(link.id); }}>
+              {/* Invisible wide hitbox */}
               <path
                 d={pathD}
                 fill="none"
                 stroke="transparent"
-                strokeWidth={16}
+                strokeWidth={24}
               />
-              {/* Outline / Selection Glow */}
+
+              {/* Selection / Hover Glow Aura */}
               {isSelected && (
                 <path
                   d={pathD}
                   fill="none"
-                  stroke="#fb923c"
-                  strokeWidth={stroke.width + 5}
-                  opacity={0.8}
+                  stroke={stroke.color}
+                  strokeWidth={stroke.width + 6}
+                  opacity={0.7}
                   filter="url(#glow)"
                 />
               )}
-              {/* Cable Line */}
+
+              {/* Underlying border / shadow line */}
+              <path
+                d={pathD}
+                fill="none"
+                stroke="#020617"
+                strokeWidth={stroke.width + 2.5}
+                strokeLinecap="round"
+              />
+
+              {/* Main Mindmap Cable Line */}
               <path
                 d={pathD}
                 fill="none"
                 stroke={stroke.color}
-                strokeWidth={stroke.width}
-                strokeDasharray={stroke.dash}
-                className={isSimulationMode ? 'animate-pulse' : ''}
+                strokeWidth={isSelected ? stroke.width + 1 : stroke.width}
+                strokeDasharray={stroke.strokeDash}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                markerEnd={`url(#arrow-${link.type || 'default'})`}
+                className={`transition-all duration-150 ${isSimulationMode ? 'animate-pulse' : ''} group-hover:brightness-125`}
               />
 
-              {/* Link Center Label */}
-              {link.label && (
-                <g transform={`translate(${midX}, ${midY})`}>
-                  <rect
-                    x={-45}
-                    y={-10}
-                    width={90}
-                    height={20}
-                    rx={6}
-                    fill="#1e293b"
-                    stroke={isSelected ? '#fb923c' : '#334155'}
-                    strokeWidth={1}
-                  />
-                  <text
-                    x={0}
-                    y={4}
-                    fill="#cbd5e1"
-                    fontSize={9}
-                    fontWeight="bold"
-                    textAnchor="middle"
+              {/* Start Terminal Bullet Dot */}
+              <circle
+                cx={srcPort.x}
+                cy={srcPort.y}
+                r={4}
+                fill={stroke.color}
+                stroke="#0f172a"
+                strokeWidth={1.5}
+              />
+
+              {/* Midpoint Info Badge Pill */}
+              <g transform={`translate(${midX}, ${midY})`}>
+                <rect
+                  x={-42}
+                  y={-10}
+                  width={84}
+                  height={20}
+                  rx={10}
+                  fill="#0f172a"
+                  stroke={isSelected ? '#f97316' : stroke.color}
+                  strokeWidth={isSelected ? 2 : 1.2}
+                  filter="url(#drop-shadow)"
+                  className="transition-colors group-hover:fill-slate-900"
+                />
+                <circle cx={-30} cy={0} r={3} fill={stroke.color} />
+                <text
+                  x={4}
+                  y={3.5}
+                  fill="#f1f5f9"
+                  fontSize={8.5}
+                  fontWeight="800"
+                  fontFamily="sans-serif"
+                  textAnchor="middle"
+                  className="pointer-events-none"
+                >
+                  {link.label || stroke.label}
+                </text>
+
+                {/* Quick Delete Cable Button when selected or hovered */}
+                {isSelected && onDeleteLink && (
+                  <g
+                    transform="translate(48, 0)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteLink(link.id);
+                    }}
+                    className="cursor-pointer"
                   >
-                    {link.label}
-                  </text>
-                </g>
-              )}
+                    <circle r={8} fill="#ef4444" stroke="#ffffff" strokeWidth={1.5} />
+                    <text x={0} y={3} fill="#ffffff" fontSize={10} fontWeight="900" textAnchor="middle">×</text>
+                  </g>
+                )}
+              </g>
             </g>
           );
         })}
 
-        {/* Temporary connecting line when dragging a new cable (smooth glowing bezier curve) */}
+        {/* Temporary connecting line when dragging a new cable (Live Smooth Mindmap Bezier) */}
         {connectingSourceNode && (
           <g>
-            <path
-              d={`M ${draggedCableStartPos?.x || (connectingSourceNode.x + 45)} ${draggedCableStartPos?.y || (connectingSourceNode.y + 28)} Q ${((draggedCableStartPos?.x || (connectingSourceNode.x + 45)) + mousePos.x) / 2} ${(draggedCableStartPos?.y || (connectingSourceNode.y + 28))} ${mousePos.x} ${mousePos.y}`}
-              fill="none"
-              stroke={hoveredTargetNodeId ? '#10b981' : '#fb923c'}
-              strokeWidth={hoveredTargetNodeId ? 5 : 3.5}
-              strokeDasharray={hoveredTargetNodeId ? 'none' : '8,6'}
-              filter="url(#glow)"
-              className="animate-pulse"
-            />
-            <circle
-              cx={mousePos.x}
-              cy={mousePos.y}
-              r={hoveredTargetNodeId ? 8 : 6}
-              fill={hoveredTargetNodeId ? '#10b981' : '#f97316'}
-              stroke="#ffffff"
-              strokeWidth={2}
-            />
+            {(() => {
+              const startX = draggedCableStartPos?.x || (connectingSourceNode.x + 45);
+              const startY = draggedCableStartPos?.y || (connectingSourceNode.y + 28);
+              const side = draggedCableStartPos?.side || 'right';
+
+              let endX = mousePos.x;
+              let endY = mousePos.y;
+              let targetDir = 'left';
+
+              if (hoveredTargetNode) {
+                const port = getPortCoordinates(hoveredTargetNode, startX, startY);
+                endX = port.x;
+                endY = port.y;
+                targetDir = port.dir;
+              }
+
+              const livePath = calculateMindmapPath(
+                startX,
+                startY,
+                side,
+                endX,
+                endY,
+                targetDir
+              );
+
+              return (
+                <>
+                  {/* Glowing Preview Curve */}
+                  <path
+                    d={livePath}
+                    fill="none"
+                    stroke={hoveredTargetNode ? '#10b981' : '#f97316'}
+                    strokeWidth={hoveredTargetNode ? 4.5 : 3.5}
+                    strokeDasharray={hoveredTargetNode ? 'none' : '6,5'}
+                    strokeLinecap="round"
+                    markerEnd={hoveredTargetNode ? 'url(#arrow-hover)' : 'url(#arrow-default)'}
+                    filter="url(#glow)"
+                    className="animate-pulse"
+                  />
+
+                  {/* Start Point Dot */}
+                  <circle
+                    cx={startX}
+                    cy={startY}
+                    r={5}
+                    fill="#f97316"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                  />
+
+                  {/* Target Cursor Pulse Dot */}
+                  <circle
+                    cx={endX}
+                    cy={endY}
+                    r={hoveredTargetNode ? 8 : 6}
+                    fill={hoveredTargetNode ? '#10b981' : '#f97316'}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    className="animate-ping"
+                  />
+                  <circle
+                    cx={endX}
+                    cy={endY}
+                    r={hoveredTargetNode ? 7 : 5}
+                    fill={hoveredTargetNode ? '#10b981' : '#f97316'}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                  />
+                </>
+              );
+            })()}
           </g>
         )}
 
@@ -571,7 +788,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md border border-orange-500/80 shadow-2xl rounded-2xl px-4 py-2 flex items-center gap-3 text-white text-xs select-none pointer-events-auto">
           <div className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-ping shrink-0" />
           <span>
-            Arraste a bolinha até outro equipamento para ligar o cabo <strong className="text-orange-400">{selectedCableType.toUpperCase()}</strong>
+            Solte a bolinha sobre outro equipamento para ligar o cabo <strong className="text-orange-400">{(selectedCableType || 'fiber_sm').toUpperCase()}</strong>
           </span>
           <button
             type="button"
@@ -671,7 +888,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       : isTargetHovered
                       ? 'bg-emerald-400 border-white ring-4 ring-emerald-400 scale-135 shadow-xl'
                       : connectingSourceId
-                      ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-400/80 scale-110 opacity-100 shadow-md'
+                      ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-400/80 scale-110 opacity-100 shadow-md animate-pulse'
                       : 'bg-orange-500 hover:bg-orange-400 border-slate-900 opacity-80 group-hover:opacity-100 hover:scale-125 shadow-md shadow-orange-500/40'
                   }`}
                   title="Clique e arraste esta bolinha até outro equipamento para ligar o cabo"
@@ -689,12 +906,48 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       : isTargetHovered
                       ? 'bg-emerald-400 border-white ring-4 ring-emerald-400 scale-135 shadow-xl'
                       : connectingSourceId
-                      ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-400/80 scale-110 opacity-100 shadow-md'
+                      ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-400/80 scale-110 opacity-100 shadow-md animate-pulse'
                       : 'bg-orange-500 hover:bg-orange-400 border-slate-900 opacity-0 group-hover:opacity-100 hover:scale-125 shadow-md shadow-orange-500/40'
                   }`}
                   title="Clique e arraste esta bolinha até outro equipamento para ligar o cabo"
                 >
                   <div className="w-2 h-2 rounded-full bg-white pointer-events-none" />
+                </div>
+
+                {/* Top Port Connector Dot */}
+                <div
+                  onMouseDown={(e) => handleStartCableDrag(e, node.id, 'top')}
+                  onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
+                  className={`absolute -top-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-crosshair transition-all z-30 ${
+                    isConnectSource
+                      ? 'bg-orange-500 border-white ring-2 ring-orange-400'
+                      : isTargetHovered
+                      ? 'bg-emerald-400 border-white ring-4 ring-emerald-400'
+                      : connectingSourceId
+                      ? 'bg-emerald-500 border-slate-900 opacity-90 scale-105 animate-pulse'
+                      : 'bg-orange-500 border-slate-900 opacity-0 group-hover:opacity-90 hover:scale-115'
+                  }`}
+                  title="Conectar porta superior"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
+                </div>
+
+                {/* Bottom Port Connector Dot */}
+                <div
+                  onMouseDown={(e) => handleStartCableDrag(e, node.id, 'bottom')}
+                  onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
+                  className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-crosshair transition-all z-30 ${
+                    isConnectSource
+                      ? 'bg-orange-500 border-white ring-2 ring-orange-400'
+                      : isTargetHovered
+                      ? 'bg-emerald-400 border-white ring-4 ring-emerald-400'
+                      : connectingSourceId
+                      ? 'bg-emerald-500 border-slate-900 opacity-90 scale-105 animate-pulse'
+                      : 'bg-orange-500 border-slate-900 opacity-0 group-hover:opacity-90 hover:scale-115'
+                  }`}
+                  title="Conectar porta inferior"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
                 </div>
               </div>
 
