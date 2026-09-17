@@ -59,8 +59,8 @@ interface NetworkCanvasProps {
   panOffset: { x: number; y: number };
   onPanChange: (offset: { x: number; y: number }) => void;
   onZoomChange?: (zoom: number) => void;
-  selectedCableType: string;
-  isConnectingMode: boolean;
+  selectedCableType?: string;
+  isConnectingMode?: boolean;
   onOpenRackElevation?: (rackNode: NetworkNode) => void;
 }
 
@@ -96,8 +96,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   panOffset,
   onPanChange,
   onZoomChange,
-  selectedCableType,
-  isConnectingMode,
+  selectedCableType = 'fiber_sm',
+  isConnectingMode = false,
   onOpenRackElevation,
 }) => {
   // Folder visibility map

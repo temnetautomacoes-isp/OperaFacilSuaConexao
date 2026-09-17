@@ -581,8 +581,6 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             panOffset={panOffset}
             onPanChange={setPanOffset}
             onZoomChange={setZoom}
-            selectedCableType={selectedCableType}
-            isConnectingMode={isConnectingMode}
             onOpenRackElevation={setRackElevationModalNode}
           />
         ) : (
