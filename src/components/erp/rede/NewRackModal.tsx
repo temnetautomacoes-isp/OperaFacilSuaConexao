@@ -17,7 +17,8 @@ import {
   Cpu,
   Zap,
   Sparkles,
-  Check
+  Check,
+  Plus
 } from 'lucide-react';
 import { NetworkNode, DeviceType, NetworkFolder } from '../../../types/network';
 import { supabaseService } from '../../../services/supabaseService';
