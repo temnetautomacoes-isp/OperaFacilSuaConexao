@@ -21,6 +21,8 @@ export interface StoreSettings {
   slogan?: string;
   cnpj?: string;
   phone?: string;
+  address?: string;
+  receiptFooter?: string;
   logoUrl?: string;
 }
 
@@ -83,19 +85,57 @@ export const supabaseService = {
       slogan: data.tagline || undefined,
       cnpj: data.cnpj || undefined,
       phone: data.phone || undefined,
+      address: data.address_text || (typeof data.address === 'string' ? data.address : undefined),
+      receiptFooter: data.receipt_footer || undefined,
       logoUrl: data.logo_url || undefined,
     };
   },
 
   async saveCompanySettings(settings: Partial<StoreSettings>): Promise<void> {
-    await supabase.from('company_info').upsert({
+    let finalLogoUrl = settings.logoUrl;
+    if (finalLogoUrl && finalLogoUrl.startsWith('data:image/')) {
+      try {
+        const res = await fetch(finalLogoUrl);
+        const blob = await res.blob();
+        const ext = finalLogoUrl.includes('image/png') ? 'png' : 'jpg';
+        const filePath = `company/logo_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('operafacil-media')
+          .upload(filePath, blob, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: blob.type || 'image/png',
+          });
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from('operafacil-media')
+            .getPublicUrl(filePath);
+          if (data?.publicUrl) {
+            finalLogoUrl = data.publicUrl;
+            settings.logoUrl = finalLogoUrl;
+          }
+        }
+      } catch (err) {
+        console.warn('[saveCompanySettings] Falha no upload da logo para Storage:', err);
+      }
+    }
+
+    const payload: any = {
       id: 'default',
-      name: settings.name,
-      tagline: settings.slogan,
-      cnpj: settings.cnpj,
-      phone: settings.phone,
-      logo_url: settings.logoUrl || null,
-    });
+    };
+    if (settings.name !== undefined) payload.name = settings.name;
+    if (settings.slogan !== undefined) payload.tagline = settings.slogan;
+    if (settings.cnpj !== undefined) payload.cnpj = settings.cnpj;
+    if (settings.phone !== undefined) payload.phone = settings.phone;
+    if (settings.address !== undefined) payload.address_text = settings.address;
+    if (settings.receiptFooter !== undefined) payload.receipt_footer = settings.receiptFooter;
+    if (finalLogoUrl !== undefined) payload.logo_url = finalLogoUrl || null;
+
+    const { error } = await supabase.from('company_info').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('[saveCompanySettings] Erro ao salvar dados da empresa:', error);
+      throw error;
+    }
   },
 
   // -------------------------------------------------------------

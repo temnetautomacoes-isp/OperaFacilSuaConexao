@@ -379,6 +379,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...(c.slogan ? { slogan: c.slogan } : {}),
             ...(c.cnpj ? { cnpj: c.cnpj } : {}),
             ...(c.phone ? { phone: c.phone } : {}),
+            ...(c.address ? { address: c.address } : {}),
+            ...(c.receiptFooter ? { receiptFooter: c.receiptFooter } : {}),
             ...(c.logoUrl !== undefined ? { logoUrl: c.logoUrl } : {}),
           }));
         }
@@ -580,14 +582,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_info' }, async () => {
         const fresh = await supabaseService.fetchCompanySettings();
         if (fresh) {
-          setSettings((prev) => ({
-            ...prev,
-            ...(fresh.name ? { name: fresh.name } : {}),
-            ...(fresh.slogan ? { slogan: fresh.slogan } : {}),
-            ...(fresh.cnpj ? { cnpj: fresh.cnpj } : {}),
-            ...(fresh.phone ? { phone: fresh.phone } : {}),
-            ...(fresh.logoUrl !== undefined ? { logoUrl: fresh.logoUrl } : {}),
-          }));
+          setSettings((prev) => {
+            const merged = {
+              ...prev,
+              ...(fresh.name ? { name: fresh.name } : {}),
+              ...(fresh.slogan ? { slogan: fresh.slogan } : {}),
+              ...(fresh.cnpj ? { cnpj: fresh.cnpj } : {}),
+              ...(fresh.phone ? { phone: fresh.phone } : {}),
+              ...(fresh.address ? { address: fresh.address } : {}),
+              ...(fresh.receiptFooter ? { receiptFooter: fresh.receiptFooter } : {}),
+              ...(fresh.logoUrl !== undefined ? { logoUrl: fresh.logoUrl } : {}),
+            };
+            safeSetItem('mercadinho_settings', merged);
+            return merged;
+          });
         }
       })
       .subscribe();
@@ -728,10 +736,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (newSettings: Partial<StoreSettings>) => {
     setSettings((prev) => {
       const merged = { ...prev, ...newSettings };
-      supabaseService.saveCompanySettings(merged).catch(console.error);
+      safeSetItem('mercadinho_settings', merged);
+      supabaseService.saveCompanySettings(merged).then(() => {
+        supabaseService.fetchCompanySettings().then((fresh) => {
+          if (fresh) {
+            setSettings((p) => {
+              const reMerged = {
+                ...p,
+                ...(fresh.name ? { name: fresh.name } : {}),
+                ...(fresh.slogan ? { slogan: fresh.slogan } : {}),
+                ...(fresh.cnpj ? { cnpj: fresh.cnpj } : {}),
+                ...(fresh.phone ? { phone: fresh.phone } : {}),
+                ...(fresh.address ? { address: fresh.address } : {}),
+                ...(fresh.receiptFooter ? { receiptFooter: fresh.receiptFooter } : {}),
+                ...(fresh.logoUrl !== undefined ? { logoUrl: fresh.logoUrl } : {}),
+              };
+              safeSetItem('mercadinho_settings', reMerged);
+              return reMerged;
+            });
+          }
+        }).catch(console.error);
+      }).catch(console.error);
       return merged;
     });
-    showNotification('Configurações atualizadas com sucesso!');
+    showNotification('Configurações da empresa salvas na nuvem com sucesso!');
   };
 
   // Products

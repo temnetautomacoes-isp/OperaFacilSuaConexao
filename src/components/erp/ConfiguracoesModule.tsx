@@ -64,6 +64,17 @@ export const ConfiguracoesModule: React.FC = () => {
   const [logoUrl, setLogoUrl] = useState<string>(settings.logoUrl || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sincroniza campos do formulário quando as configurações forem carregadas da nuvem
+  useEffect(() => {
+    setName(settings.name || '');
+    setSlogan(settings.slogan || '');
+    setCnpj(settings.cnpj || '');
+    setPhone(settings.phone || '');
+    setAddress(settings.address || '');
+    setReceiptFooter(settings.receiptFooter || '');
+    setLogoUrl(settings.logoUrl || '');
+  }, [settings]);
+
   // User Management state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);

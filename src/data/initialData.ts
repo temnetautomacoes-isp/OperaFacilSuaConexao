@@ -79,12 +79,13 @@ export const INITIAL_USERS: UserAccount[] = [
 export const INITIAL_EMPLOYEE_DOCUMENTS: EmployeeDocument[] = [];
 
 export const INITIAL_SETTINGS: StoreSettings = {
-  name: 'OperaFácil',
-  slogan: 'Gestão Completa. Conexão que Impulsiona.',
+  name: 'TemNet',
+  slogan: 'Sua conexão completa',
   cnpj: '12.345.678/0001-90',
-  phone: '(11) 98765-4321',
-  address: 'Av. das Telecomunicações, 1000 - Polo Tecnológico',
-  receiptFooter: 'OperaFácil ERP - Tecnologia e Gestão para Provedores de Internet.',
+  phone: '(11) 3456-7890',
+  address: 'RUA DOUTOR RENATO VASCONCELOS BITTENCOURT - 169 - ALAGOINHAS - BA',
+  receiptFooter: 'TemNet, a sua conexão completa.',
+  logoUrl: 'https://ajeakvcgzcmpifnwhenl.supabase.co/storage/v1/object/public/operafacil-media/company/logo_temnet.png',
 };
 
 // Histórico de pontos mockados para o mês atual
