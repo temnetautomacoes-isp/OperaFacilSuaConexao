@@ -151,6 +151,7 @@ export interface LinkStyleConfig {
   hasArrow?: boolean;
   arrowType?: 'end' | 'both' | 'none';
   lineStyle?: 'straight' | 'curved' | 'stepped';
+  showLabel?: boolean;
 }
 
 export interface NetworkLink {

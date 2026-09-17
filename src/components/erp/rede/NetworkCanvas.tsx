@@ -735,8 +735,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     const width = style?.strokeWidth || baseConfig.width;
     const arrowType = style?.arrowType !== undefined ? style.arrowType : (style?.hasArrow === false ? 'none' : 'end');
     const lineStyle = style?.lineStyle || 'straight';
+    const showLabel = style?.showLabel !== undefined ? style.showLabel : true;
 
-    return { color, strokeDash, width, arrowType, lineStyle, label: link.label || (link.points ? 'Traçado' : baseConfig.label) };
+    return { color, strokeDash, width, arrowType, lineStyle, showLabel, label: link.label || (link.points ? 'Traçado' : baseConfig.label) };
   };
 
   // Render Device Stencil Icon
@@ -1333,48 +1334,64 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 />
               ))}
 
-              {/* Midpoint Label Badge */}
-              <g transform={`translate(${midX}, ${midY})`}>
-                <rect
-                  x={-38}
-                  y={-9}
-                  width={76}
-                  height={18}
-                  rx={9}
-                  fill="#0f172a"
-                  stroke={isSelected ? '#facc15' : stroke.color}
-                  strokeWidth={isSelected ? 1.8 : 1}
-                  className="transition-colors group-hover:fill-slate-900"
-                />
-                <circle cx={-26} cy={0} r={2.5} fill={stroke.color} />
-                <text
-                  x={4}
-                  y={3}
-                  fill="#f1f5f9"
-                  fontSize={8}
-                  fontWeight="bold"
-                  fontFamily="sans-serif"
-                  textAnchor="middle"
-                  className="pointer-events-none"
-                >
-                  {stroke.label}
-                </text>
+              {/* Midpoint Label Badge or Quick Selection Delete */}
+              {stroke.showLabel ? (
+                <g transform={`translate(${midX}, ${midY})`}>
+                  <rect
+                    x={-38}
+                    y={-9}
+                    width={76}
+                    height={18}
+                    rx={9}
+                    fill="#0f172a"
+                    stroke={isSelected ? '#facc15' : stroke.color}
+                    strokeWidth={isSelected ? 1.8 : 1}
+                    className="transition-colors group-hover:fill-slate-900"
+                  />
+                  <circle cx={-26} cy={0} r={2.5} fill={stroke.color} />
+                  <text
+                    x={4}
+                    y={3}
+                    fill="#f1f5f9"
+                    fontSize={8}
+                    fontWeight="bold"
+                    fontFamily="sans-serif"
+                    textAnchor="middle"
+                    className="pointer-events-none"
+                  >
+                    {stroke.label}
+                  </text>
 
-                {/* Delete button on selection */}
-                {isSelected && onDeleteLink && (
+                  {/* Delete button on selection */}
+                  {isSelected && onDeleteLink && (
+                    <g
+                      transform="translate(42, 0)"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteLink(link.id);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <circle r={7} fill="#ef4444" stroke="#ffffff" strokeWidth={1} />
+                      <text x={0} y={2.5} fill="#ffffff" fontSize={9} fontWeight="900" textAnchor="middle">×</text>
+                    </g>
+                  )}
+                </g>
+              ) : (
+                isSelected && onDeleteLink && (
                   <g
-                    transform="translate(42, 0)"
+                    transform={`translate(${midX}, ${midY})`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onDeleteLink(link.id);
                     }}
                     className="cursor-pointer"
                   >
-                    <circle r={7} fill="#ef4444" stroke="#ffffff" strokeWidth={1} />
-                    <text x={0} y={2.5} fill="#ffffff" fontSize={9} fontWeight="900" textAnchor="middle">×</text>
+                    <circle r={8} fill="#ef4444" stroke="#ffffff" strokeWidth={1.5} />
+                    <text x={0} y={3} fill="#ffffff" fontSize={10} fontWeight="900" textAnchor="middle">×</text>
                   </g>
-                )}
-              </g>
+                )
+              )}
             </g>
           );
         })}

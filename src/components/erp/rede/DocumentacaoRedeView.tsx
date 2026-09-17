@@ -128,6 +128,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
     hasArrow: true,
     arrowType: 'end',
     lineStyle: 'straight',
+    showLabel: true,
   });
   const [isDrawingPathMode, setIsDrawingPathMode] = useState(false);
   const [canvasTool, setCanvasTool] = useState<'select' | 'draw_link' | 'add_shape'>('select');
@@ -472,6 +473,22 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                   Ortogonal
                 </button>
               </div>
+            </div>
+
+            {/* 6. Exibir Texto na Linha (Checkbox) */}
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-750 px-2.5 py-1 rounded-xl border border-slate-700 select-none transition-colors" title="Habilitar ou desabilitar texto/etiqueta na linha">
+                <input
+                  type="checkbox"
+                  checked={lineConfig.showLabel !== false}
+                  onChange={(e) => setLineConfig(prev => ({ ...prev, showLabel: e.target.checked }))}
+                  className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-400 bg-slate-900 border-slate-600 accent-orange-500 cursor-pointer"
+                />
+                <span className="text-[11px] font-bold text-slate-200 flex items-center gap-1">
+                  <Type className="w-3 h-3 text-orange-400" />
+                  Exibir Texto
+                </span>
+              </label>
             </div>
           </div>
 

@@ -658,6 +658,25 @@ export const DeviceInspector: React.FC<DeviceInspectorProps> = ({
                 placeholder="Ex: Tronco 10G / PTT"
                 className="w-full px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white"
               />
+              <label className="flex items-center gap-2 cursor-pointer mt-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={selectedLink.style?.showLabel !== false}
+                  onChange={(e) => {
+                    onUpdateLink({
+                      ...selectedLink,
+                      style: {
+                        ...(selectedLink.style || {}),
+                        showLabel: e.target.checked
+                      }
+                    });
+                  }}
+                  className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-400 bg-slate-100 border-slate-300 accent-orange-500 cursor-pointer"
+                />
+                <span className="text-[11px] font-semibold text-slate-700">
+                  Exibir texto/etiqueta na linha
+                </span>
+              </label>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
