@@ -6,6 +6,7 @@ import { ExplorerFolder, ExplorerFile } from '../../../types';
 import {
   Folder,
   FolderPlus,
+  FolderOpen,
   Upload,
   Search,
   ChevronRight,
