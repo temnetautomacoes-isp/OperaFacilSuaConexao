@@ -199,6 +199,23 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
   const [batchMediaType, setBatchMediaType] = useState<PortMediaType>('ethernet');
   const [batchSpeedMode, setBatchSpeedMode] = useState<PortSpeedMode>('1000M');
 
+  // Sync initial parent rack & slot position when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialParentRackId) {
+        setParentRackId(initialParentRackId);
+        const rack = allNodes.find(n => n.id === initialParentRackId);
+        if (rack) {
+          if (rack.folderId) setFolderId(rack.folderId);
+          setLocation(`${rack.name} (${initialRackPosition || 'U1'})`);
+        }
+      }
+      if (initialRackPosition) {
+        setRackPosition(initialRackPosition);
+      }
+    }
+  }, [isOpen, initialParentRackId, initialRackPosition, allNodes]);
+
   // Catalog / Template Library Filter
   const [templateSearch, setTemplateSearch] = useState('');
   const [templateCatFilter, setTemplateCatFilter] = useState('all');
@@ -470,7 +487,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150 select-none">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in zoom-in-95 duration-150 select-none">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">

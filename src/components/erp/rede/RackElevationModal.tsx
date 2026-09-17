@@ -75,6 +75,14 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
   const [rackSearch, setRackSearch] = useState('');
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragOverU, setDragOverU] = useState<number | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSaveAndClose = () => {
+    setIsSaved(true);
+    setTimeout(() => {
+      onClose();
+    }, 450);
+  };
 
   // Modal de edição / detalhes do ativo clicado
   const [editingAssetNode, setEditingAssetNode] = useState<NetworkNode | null>(null);
@@ -263,6 +271,29 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                 + Novo Ativo no Rack
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={handleSaveAndClose}
+              className={`px-4 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
+                isSaved
+                  ? 'bg-emerald-500 text-white shadow-emerald-500/30'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 active:scale-95'
+              }`}
+              title="Salvar alterações e fechar diagrama"
+            >
+              {isSaved ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-white animate-in zoom-in-75 duration-150" />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Alterações</span>
+                </>
+              )}
+            </button>
 
             <button
               type="button"
@@ -771,6 +802,44 @@ export const RackElevationModal: React.FC<RackElevationModalProps> = ({
                 <span className="text-orange-400 font-bold">{totalUnits}U (Padrão 19")</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Modal Bottom Footer Bar */}
+        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-slate-400 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Disposição de slots e equipamentos sincronizados automaticamente com a infraestrutura.</span>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+            >
+              Fechar
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAndClose}
+              className={`px-5 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-lg transition-all cursor-pointer ${
+                isSaved
+                  ? 'bg-emerald-500 text-white shadow-emerald-500/30'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25 active:scale-95'
+              }`}
+            >
+              {isSaved ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-white animate-in zoom-in-75 duration-150" />
+                  <span>Salvo com Sucesso!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Alterações</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
