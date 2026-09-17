@@ -1307,7 +1307,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const user: UserAccount = { ...newUser, id, email: cleanEmail, password: cleanPass };
     setUsers((prev) => [...prev, user]);
-    supabaseService.saveUser(user).catch(console.error);
+    supabaseService.saveUser(user).then(() => {
+      supabaseService.fetchUsers().then((fresh) => {
+        if (fresh.length > 0) {
+          setUsers(fresh);
+          safeSetItem('mercadinho_users', fresh);
+        }
+      }).catch(console.error);
+    }).catch(console.error);
     showNotification(`Usuário "${user.name}" cadastrado com sucesso e integrado ao Supabase Auth!`);
   };
 
