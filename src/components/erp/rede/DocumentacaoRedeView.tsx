@@ -192,6 +192,43 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
 
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
+  // Centraliza a visão do mapa suavemente em cima do nó/ativo selecionado
+  const centerMapOnNode = (nodeId: string | null) => {
+    if (!nodeId) return;
+    const target = nodes.find(n => n.id === nodeId);
+    if (!target) return;
+
+    let posX = target.x;
+    let posY = target.y;
+
+    // Se estiver montado dentro de um Rack, usa a coordenada visual do Rack
+    if (target.parentRackId) {
+      const parentRack = nodes.find(n => n.id === target.parentRackId);
+      if (parentRack && parentRack.x !== undefined) {
+        posX = parentRack.x;
+        posY = parentRack.y;
+      }
+    }
+
+    if (posX === undefined || posY === undefined) return;
+
+    if (viewMode !== 'canvas') {
+      setViewMode('canvas');
+    }
+
+    const container = document.getElementById('network-canvas-container');
+    const w = container?.clientWidth || (window.innerWidth - (isSidebarCollapsed ? 48 : 288));
+    const h = container?.clientHeight || (window.innerHeight - 160);
+
+    const nodeCenterX = posX + 70;
+    const nodeCenterY = posY + 45;
+
+    const targetPanX = Math.round(w / 2 - nodeCenterX * zoom);
+    const targetPanY = Math.round(h / 2 - nodeCenterY * zoom);
+
+    setPanOffset({ x: targetPanX, y: targetPanY });
+  };
+
   const breadcrumbs = getBreadcrumbs(selectedFolderId);
   const folderNodes = selectedFolderId ? nodes.filter(n => n.folderId === selectedFolderId) : nodes;
   const selectedNode = isInspectorOpen && selectedNodeId ? (nodes.find(n => n.id === selectedNodeId) || null) : null;
@@ -577,7 +614,14 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           onSelectFolder={onSelectFolder}
           onSelectNode={(nodeId) => {
             onSelectNode(nodeId);
-            if (nodeId) setIsInspectorOpen(true);
+            if (nodeId) centerMapOnNode(nodeId);
+          }}
+          onDoubleClickNode={(nodeId) => {
+            onSelectNode(nodeId);
+            if (nodeId) {
+              centerMapOnNode(nodeId);
+              setIsInspectorOpen(true);
+            }
           }}
           onToggleFolderVisibility={onToggleFolderVisibility}
           onCreateFolder={onCreateFolder}

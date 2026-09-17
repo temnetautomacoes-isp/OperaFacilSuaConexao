@@ -837,6 +837,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   return (
     <div
+      id="network-canvas-container"
       ref={containerRef}
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleContainerMouseMove}
@@ -847,6 +848,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         backgroundImage: `radial-gradient(circle, #1e293b 1.2px, transparent 1.2px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
+        transition: isPanning || draggingNodeId ? 'none' : 'background-position 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
       }}
     >
       {/* ======================================================== */}
@@ -857,6 +859,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
+          transition: isPanning || draggingNodeId ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
       >
         {shapes.map((shape) => {
@@ -1049,6 +1052,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
+          transition: isPanning || draggingNodeId ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
       >
         {visibleNodes.map((node) => {
@@ -1166,6 +1170,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
+          transition: isPanning || draggingNodeId ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
           overflow: 'visible',
         }}
       >

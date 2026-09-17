@@ -38,6 +38,7 @@ interface FolderTreeSidebarProps {
   onToggleCollapse?: () => void;
   onSelectFolder: (folderId: string | null) => void;
   onSelectNode: (nodeId: string | null) => void;
+  onDoubleClickNode?: (nodeId: string) => void;
   onToggleFolderVisibility: (folderId: string) => void;
   onCreateFolder: (name: string, parentId: string | null) => void;
   onDeleteFolder: (folderId: string) => void;
@@ -55,6 +56,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   onToggleCollapse,
   onSelectFolder,
   onSelectNode,
+  onDoubleClickNode,
   onToggleFolderVisibility,
   onCreateFolder,
   onDeleteFolder,
@@ -302,7 +304,12 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectNode(rack.id);
-                      if (onOpenRackElevation) {
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (onDoubleClickNode) {
+                        onDoubleClickNode(rack.id);
+                      } else if (onOpenRackElevation) {
                         onOpenRackElevation(rack);
                       }
                     }}
@@ -312,6 +319,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                         ? 'bg-orange-600 text-white font-black shadow-xs'
                         : 'hover:bg-orange-50/70 text-slate-800'
                     }`}
+                    title="1 clique: centraliza no mapa | 2 cliques: abre detalhes"
                   >
                     <div className="flex items-center gap-1.5 overflow-hidden flex-1">
                       {/* Rack Expand/Collapse arrow */}
@@ -324,7 +332,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                         title={isRackOpen ? 'Recolher Ativos do Rack' : 'Expandir Ativos do Rack'}
                       >
                         {mountedAssets.length > 0 ? (
-                          isRackOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
+                           isRackOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
                         ) : (
                           <span className="w-3 inline-block" />
                         )}
@@ -380,12 +388,19 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                               e.stopPropagation();
                               onSelectNode(asset.id);
                             }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              if (onDoubleClickNode) {
+                                onDoubleClickNode(asset.id);
+                              }
+                            }}
                             style={{ paddingLeft: `${(level + 1) * 14 + 28}px` }}
                             className={`flex items-center justify-between py-1 pr-2 rounded-lg text-xs transition-all cursor-pointer ${
                               isAssetSelected
                                 ? 'bg-orange-500 text-white font-black shadow-xs'
                                 : 'hover:bg-slate-100 text-slate-700'
                             }`}
+                            title="1 clique: centraliza no mapa | 2 cliques: abre inspetor de dispositivo"
                           >
                             <div className="flex items-center gap-1.5 overflow-hidden">
                               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -436,12 +451,19 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
                     e.stopPropagation();
                     onSelectNode(node.id);
                   }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (onDoubleClickNode) {
+                      onDoubleClickNode(node.id);
+                    }
+                  }}
                   style={{ paddingLeft: `${(level + 1) * 14 + 14}px` }}
                   className={`flex items-center justify-between py-1 pr-2 rounded-lg text-xs transition-all cursor-pointer ${
                     isNodeSelected
                       ? 'bg-orange-600 text-white font-black shadow-xs'
                       : 'hover:bg-slate-100 text-slate-600'
                   }`}
+                  title="1 clique: centraliza no mapa | 2 cliques: abre inspetor de dispositivo"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${
