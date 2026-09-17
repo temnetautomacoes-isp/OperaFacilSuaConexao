@@ -4,7 +4,9 @@ import {
   NetworkLink, 
   SimulationPacket,
   LinkType,
-  NetworkFolder
+  NetworkFolder,
+  CanvasShape,
+  LinkStyleConfig
 } from '../../../types/network';
 import { 
   Server, 
@@ -18,29 +20,38 @@ import {
   Monitor, 
   Zap, 
   Box, 
-  Activity,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
   PhoneCall,
   BatteryCharging,
-  Cable,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  Trash2,
+  Edit3
 } from 'lucide-react';
 
 interface NetworkCanvasProps {
   nodes: NetworkNode[];
   links: NetworkLink[];
   folders?: NetworkFolder[];
+  shapes?: CanvasShape[];
+  onAddShape?: (shape: CanvasShape) => void;
+  onUpdateShape?: (shapeId: string, updates: Partial<CanvasShape>) => void;
+  onDeleteShape?: (shapeId: string) => void;
+  activeLineConfig?: LinkStyleConfig;
   selectedNodeId: string | null;
   selectedLinkId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onDoubleClickNode?: (nodeId: string) => void;
   onSelectLink: (linkId: string | null) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
-  onAddLink: (sourceNodeId: string, targetNodeId: string, linkType: LinkType) => void;
+  onAddLink: (
+    sourceNodeId: string, 
+    targetNodeId: string, 
+    linkType: LinkType, 
+    customStyle?: LinkStyleConfig, 
+    startPoint?: { x: number; y: number }, 
+    endPoint?: { x: number; y: number }
+  ) => void;
   onDeleteLink?: (linkId: string) => void;
   isSimulationMode: boolean;
   activePackets: SimulationPacket[];
@@ -68,6 +79,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   nodes,
   links,
   folders = [],
+  shapes = [],
+  onUpdateShape,
+  onDeleteShape,
+  activeLineConfig,
   selectedNodeId,
   selectedLinkId,
   onSelectNode,
@@ -77,7 +92,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   onAddLink,
   onDeleteLink,
   isSimulationMode,
-  activePackets,
   zoom,
   panOffset,
   onPanChange,
@@ -95,14 +109,21 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
   const visibleLinks = links.filter(l => visibleNodeIds.has(l.sourceNodeId) && visibleNodeIds.has(l.targetNodeId));
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Drag states
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [draggingShapeId, setDraggingShapeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Shape selection & inline editing state
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
+  const [editingShapeText, setEditingShapeText] = useState('');
+
   // Connecting cable state (Drag to Connect)
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
-  const [draggedCableStartPos, setDraggedCableStartPos] = useState<{ x: number; y: number; side?: string } | null>(null);
   const [hoveredTargetNodeId, setHoveredTargetNodeId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -136,62 +157,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     };
   }, [zoom, panOffset, onPanChange, onZoomChange]);
 
-  // Calculate Port Coordinates for clean Mindmap connections
-  const getPortCoordinates = (node: NetworkNode, targetX: number, targetY: number) => {
-    const nodeCenterX = node.x + 45;
-    const nodeCenterY = node.y + 28;
-    const dx = targetX - nodeCenterX;
-    const dy = targetY - nodeCenterY;
-
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      if (dx >= 0) {
-        return { x: node.x + 65, y: node.y + 28, dir: 'right' };
-      } else {
-        return { x: node.x + 25, y: node.y + 28, dir: 'left' };
-      }
-    } else {
-      if (dy >= 0) {
-        return { x: node.x + 45, y: node.y + 56, dir: 'bottom' };
-      } else {
-        return { x: node.x + 45, y: node.y, dir: 'top' };
-      }
-    }
-  };
-
-  // Calculate smooth Mindmap / Flowchart S-curve path
-  const calculateMindmapPath = (
-    x1: number,
-    y1: number,
-    dir1: string,
-    x2: number,
-    y2: number,
-    dir2: string
-  ) => {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const curvature = Math.max(40, Math.min(180, Math.hypot(dx, dy) * 0.45));
-
-    let cp1x = x1;
-    let cp1y = y1;
-    let cp2x = x2;
-    let cp2y = y2;
-
-    if (dir1 === 'right') cp1x += curvature;
-    else if (dir1 === 'left') cp1x -= curvature;
-    else if (dir1 === 'bottom') cp1y += curvature;
-    else if (dir1 === 'top') cp1y -= curvature;
-
-    if (dir2 === 'right') cp2x += curvature;
-    else if (dir2 === 'left') cp2x -= curvature;
-    else if (dir2 === 'bottom') cp2y += curvature;
-    else if (dir2 === 'top') cp2y -= curvature;
-
-    return `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
-  };
-
   // Global window listeners for drag & pan & cable dragging
   useEffect(() => {
-    if (!draggingNodeId && !isPanning && !connectingSourceId) return;
+    if (!draggingNodeId && !draggingShapeId && !isPanning && !connectingSourceId) return;
 
     const onWindowMouseMove = (e: MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -230,17 +198,28 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
         onMoveNode(draggingNodeId, newX, newY);
       }
+
+      if (draggingShapeId && onUpdateShape) {
+        let newX = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
+        let newY = (e.clientY - rect.top - panOffset.y) / zoom - dragOffset.y;
+
+        newX = Math.round(newX / 10) * 10;
+        newY = Math.round(newY / 10) * 10;
+
+        onUpdateShape(draggingShapeId, { x: newX, y: newY });
+      }
     };
 
-    const onWindowMouseUp = (e: MouseEvent) => {
+    const onWindowMouseUp = () => {
       setIsPanning(false);
       setDraggingNodeId(null);
+      setDraggingShapeId(null);
 
       if (connectingSourceId) {
         const rect = containerRef.current?.getBoundingClientRect();
         if (rect) {
-          const curX = (e.clientX - rect.left - panOffset.x) / zoom;
-          const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+          const curX = mousePos.x;
+          const curY = mousePos.y;
 
           // Connect if dropped over target node
           let target = hoveredTargetNodeId ? visibleNodes.find(n => n.id === hoveredTargetNodeId) : null;
@@ -254,11 +233,15 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           }
 
           if (target && target.id !== connectingSourceId) {
-            onAddLink(connectingSourceId, target.id, (selectedCableType || 'fiber_sm') as LinkType);
+            onAddLink(
+              connectingSourceId, 
+              target.id, 
+              (selectedCableType || 'fiber_sm') as LinkType,
+              activeLineConfig
+            );
           }
         }
         setConnectingSourceId(null);
-        setDraggedCableStartPos(null);
         setHoveredTargetNodeId(null);
       }
     };
@@ -266,8 +249,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setConnectingSourceId(null);
-        setDraggedCableStartPos(null);
         setHoveredTargetNodeId(null);
+        setEditingShapeId(null);
       }
     };
 
@@ -280,13 +263,30 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       window.removeEventListener('mouseup', onWindowMouseUp);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [draggingNodeId, isPanning, connectingSourceId, hoveredTargetNodeId, visibleNodes, selectedCableType, onAddLink, panStart, panOffset, zoom, dragOffset, onPanChange, onMoveNode]);
+  }, [
+    draggingNodeId, 
+    draggingShapeId, 
+    isPanning, 
+    connectingSourceId, 
+    hoveredTargetNodeId, 
+    visibleNodes, 
+    selectedCableType, 
+    activeLineConfig, 
+    onAddLink, 
+    panStart, 
+    panOffset, 
+    zoom, 
+    dragOffset, 
+    mousePos, 
+    onPanChange, 
+    onMoveNode, 
+    onUpdateShape
+  ]);
 
   // Handle Canvas Mouse Down (Pan canvas or deselect)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (connectingSourceId) {
       setConnectingSourceId(null);
-      setDraggedCableStartPos(null);
       setHoveredTargetNodeId(null);
       return;
     }
@@ -296,6 +296,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
         onSelectNode(null);
         onSelectLink(null);
+        setSelectedShapeId(null);
+        setEditingShapeId(null);
       }
     }
   };
@@ -310,37 +312,15 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Handle Canvas Mouse Up
-  const handleMouseUp = () => {
-    setIsPanning(false);
-    setDraggingNodeId(null);
-  };
-
   // Start Cable Drag from Connector Dot
-  const handleStartCableDrag = (e: React.MouseEvent, nodeId: string, side: 'right' | 'left' | 'top' | 'bottom' = 'right') => {
+  const handleStartCableDrag = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
     setConnectingSourceId(nodeId);
-    let startX = node.x + 45;
-    let startY = node.y + 28;
-
-    if (side === 'right') {
-      startX = node.x + 65;
-      startY = node.y + 28;
-    } else if (side === 'left') {
-      startX = node.x + 25;
-      startY = node.y + 28;
-    } else if (side === 'bottom') {
-      startX = node.x + 45;
-      startY = node.y + 56;
-    } else if (side === 'top') {
-      startX = node.x + 45;
-      startY = node.y;
-    }
-
-    setDraggedCableStartPos({ x: startX, y: startY, side });
+    const startX = node.x + 64;
+    const startY = node.y + 28;
     setMousePos({ x: startX, y: startY });
   };
 
@@ -351,10 +331,14 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     // If currently in connection mode, clicking this node completes the link
     if (connectingSourceId) {
       if (connectingSourceId !== nodeId) {
-        onAddLink(connectingSourceId, nodeId, (selectedCableType || 'fiber_sm') as LinkType);
+        onAddLink(
+          connectingSourceId, 
+          nodeId, 
+          (selectedCableType || 'fiber_sm') as LinkType,
+          activeLineConfig
+        );
       }
       setConnectingSourceId(null);
-      setDraggedCableStartPos(null);
       setHoveredTargetNodeId(null);
       return;
     }
@@ -368,6 +352,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     if (!node || !containerRef.current) return;
 
     onSelectNode(nodeId);
+    setSelectedShapeId(null);
     setDraggingNodeId(nodeId);
 
     const rect = containerRef.current.getBoundingClientRect();
@@ -384,9 +369,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   const handleNodeMouseUp = (e: React.MouseEvent, targetNodeId: string) => {
     if (connectingSourceId && connectingSourceId !== targetNodeId) {
       e.stopPropagation();
-      onAddLink(connectingSourceId, targetNodeId, (selectedCableType || 'fiber_sm') as LinkType);
+      onAddLink(
+        connectingSourceId, 
+        targetNodeId, 
+        (selectedCableType || 'fiber_sm') as LinkType,
+        activeLineConfig
+      );
       setConnectingSourceId(null);
-      setDraggedCableStartPos(null);
       setHoveredTargetNodeId(null);
     }
   };
@@ -408,9 +397,75 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
+  // Handle Shape Mouse Down
+  const handleShapeMouseDown = (e: React.MouseEvent, shape: CanvasShape) => {
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    onSelectNode(null);
+    onSelectLink(null);
+    setDraggingShapeId(shape.id);
+
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const clickY = (e.clientY - rect.top - panOffset.y) / zoom;
+      setDragOffset({
+        x: clickX - shape.x,
+        y: clickY - shape.y,
+      });
+    }
+  };
+
+  // Save Shape Text
+  const handleSaveShapeText = (shapeId: string) => {
+    if (onUpdateShape) {
+      onUpdateShape(shapeId, { label: editingShapeText });
+    }
+    setEditingShapeId(null);
+  };
+
+  // Calculate Link SVG Path according to curvature
+  const calculatePath = (
+    srcX: number, 
+    srcY: number, 
+    tgtX: number, 
+    tgtY: number, 
+    lineStyle: 'straight' | 'curved' | 'stepped' = 'straight'
+  ) => {
+    if (lineStyle === 'curved') {
+      const dx = tgtX - srcX;
+      const curvature = Math.max(35, Math.min(160, Math.abs(dx) * 0.5));
+      const cp1x = srcX + curvature;
+      const cp1y = srcY;
+      const cp2x = tgtX - curvature;
+      const cp2y = tgtY;
+      return `M ${srcX} ${srcY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tgtX} ${tgtY}`;
+    }
+
+    if (lineStyle === 'stepped') {
+      const midX = (srcX + tgtX) / 2;
+      return `M ${srcX} ${srcY} H ${midX} V ${tgtY} H ${tgtX}`;
+    }
+
+    return `M ${srcX} ${srcY} L ${tgtX} ${tgtY}`;
+  };
+
   // Get Cable Link Visual Styling
-  const getLinkStroke = (type: LinkType) => {
-    return LINK_CONFIG[type] || { color: '#64748b', label: 'Cabo', strokeDash: 'none', width: 2.5 };
+  const getLinkStroke = (link: NetworkLink) => {
+    const baseConfig = LINK_CONFIG[link.type] || { color: '#64748b', label: 'Cabo', strokeDash: 'none', width: 2.5 };
+    const style = link.style;
+
+    const color = style?.strokeColor || baseConfig.color;
+    let strokeDash = baseConfig.strokeDash;
+    if (style?.strokeDash === 'dashed') strokeDash = '6,5';
+    else if (style?.strokeDash === 'dotted') strokeDash = '2,4';
+    else if (style?.strokeDash === 'solid') strokeDash = 'none';
+
+    const width = style?.strokeWidth || baseConfig.width;
+    const arrowType = style?.arrowType !== undefined ? style.arrowType : 'end';
+    const lineStyle = style?.lineStyle || 'straight';
+
+    return { color, strokeDash, width, arrowType, lineStyle, label: link.label || baseConfig.label };
   };
 
   // Render Device Stencil Icon
@@ -491,12 +546,28 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   const connectingSourceNode = nodes.find(n => n.id === connectingSourceId);
   const hoveredTargetNode = hoveredTargetNodeId ? nodes.find(n => n.id === hoveredTargetNodeId) : null;
 
+  // Collect unique colors used by active lines to inject SVG markers dynamically
+  const uniqueMarkerColors = Array.from(
+    new Set([
+      '#facc15',
+      '#f97316',
+      '#38bdf8',
+      '#34d399',
+      '#a855f7',
+      '#f43f5e',
+      '#22d3ee',
+      '#ffffff',
+      '#10b981',
+      activeLineConfig?.strokeColor || '#facc15',
+      ...links.map(l => l.style?.strokeColor || LINK_CONFIG[l.type]?.color || '#facc15')
+    ])
+  );
+
   return (
     <div
       ref={containerRef}
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
       className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] cursor-${isPanning ? 'grabbing' : 'default'} select-none`}
       style={{
         backgroundImage: `radial-gradient(circle, #1e293b 1.2px, transparent 1.2px)`,
@@ -504,7 +575,125 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
       }}
     >
-      {/* SVG Canvas Layer for Clean Responsive Vector Links & Cables */}
+      {/* 1. LAYER DE FORMAS (SHAPES & ZONAS POP - renderizadas atrás dos nós) */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+        }}
+      >
+        {shapes.map((shape) => {
+          const isSelected = selectedShapeId === shape.id;
+          const isEditing = editingShapeId === shape.id;
+
+          const borderDash = shape.borderStyle === 'dashed' ? 'dashed' : shape.borderStyle === 'dotted' ? 'dotted' : 'solid';
+
+          return (
+            <div
+              key={shape.id}
+              onMouseDown={(e) => handleShapeMouseDown(e, shape)}
+              style={{
+                left: `${shape.x}px`,
+                top: `${shape.y}px`,
+                width: `${shape.width}px`,
+                height: shape.type === 'text_label' ? 'auto' : `${shape.height}px`,
+                backgroundColor: shape.color || 'rgba(30, 41, 59, 0.4)',
+                borderColor: isSelected ? '#facc15' : (shape.borderColor || '#facc15'),
+                borderWidth: `${shape.borderWidth || 2}px`,
+                borderStyle: borderDash,
+                color: shape.textColor || '#f8fafc',
+                fontSize: `${shape.fontSize || 13}px`,
+              }}
+              className={`absolute pointer-events-auto rounded-2xl p-3 flex flex-col justify-between group transition-shadow select-none cursor-move ${
+                shape.type === 'circle' ? 'rounded-full text-center flex items-center justify-center' : ''
+              } ${
+                shape.type === 'sticky_note' ? 'shadow-xl text-slate-900 font-medium' : 'backdrop-blur-2xs'
+              } ${
+                isSelected ? 'ring-2 ring-amber-400 shadow-2xl' : 'hover:ring-1 hover:ring-amber-300/60'
+              }`}
+            >
+              {/* Shape Top Header & Controls */}
+              <div className="w-full flex items-center justify-between gap-1 mb-1 pointer-events-auto">
+                <span className="text-[10px] font-black uppercase tracking-wider opacity-75 truncate max-w-[80%]">
+                  {shape.type === 'rectangle' ? 'ÁREA POP' : shape.type === 'circle' ? 'COBERTURA' : shape.type === 'sticky_note' ? 'NOTA' : 'RÓTULO'}
+                </span>
+
+                {/* Quick actions (Edit / Delete) */}
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingShapeId(shape.id);
+                      setEditingShapeText(shape.label || '');
+                    }}
+                    className="p-1 rounded bg-black/40 hover:bg-black/70 text-white cursor-pointer"
+                    title="Editar Texto"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                  {onDeleteShape && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteShape(shape.id);
+                      }}
+                      className="p-1 rounded bg-rose-600/80 hover:bg-rose-600 text-white cursor-pointer"
+                      title="Excluir Forma"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Shape Label / Body Content */}
+              {isEditing ? (
+                <div className="flex-1 flex flex-col gap-1 pointer-events-auto" onMouseDown={(e) => e.stopPropagation()}>
+                  <textarea
+                    value={editingShapeText}
+                    onChange={(e) => setEditingShapeText(e.target.value)}
+                    className="w-full h-full min-h-[50px] p-1.5 text-xs bg-black/60 text-white rounded-lg border border-amber-400 outline-none resize-none font-bold"
+                    autoFocus
+                    placeholder="Digite o texto da forma..."
+                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveShapeText(shape.id)}
+                      className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-extrabold rounded hover:bg-amber-400"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingShapeId(null)}
+                      className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingShapeId(shape.id);
+                    setEditingShapeText(shape.label || '');
+                  }}
+                  className="flex-1 flex items-center justify-center text-center font-bold break-words px-1 overflow-hidden"
+                >
+                  {shape.label || 'Clique 2x para editar'}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 2. SVG Canvas Layer for Clean Responsive Vector Links & Custom Lines */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
@@ -518,65 +707,49 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
 
-          {/* Clean Arrowhead Markers */}
-          <marker
-            id="arrow-yellow"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto"
-          >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#facc15" />
-          </marker>
-          <marker
-            id="arrow-green"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto"
-          >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
-          </marker>
-
-          {Object.entries(LINK_CONFIG).map(([type, cfg]) => (
-            <marker
-              key={type}
-              id={`arrow-${type}`}
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill={cfg.color} />
-            </marker>
-          ))}
-          <marker
-            id="arrow-default"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto"
-          >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#facc15" />
-          </marker>
+          {/* Dynamic Arrowhead Markers for All Used Colors (End & Start) */}
+          {uniqueMarkerColors.map((color) => {
+            const cleanId = color.replace(/[^a-zA-Z0-9]/g, '');
+            return (
+              <React.Fragment key={color}>
+                {/* End Marker (Right facing) */}
+                <marker
+                  id={`arrow-end-${cleanId}`}
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto"
+                >
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill={color} />
+                </marker>
+                {/* Start Marker (Left facing) */}
+                <marker
+                  id={`arrow-start-${cleanId}`}
+                  viewBox="0 0 10 10"
+                  refX="2"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto"
+                >
+                  <path d="M 8 1.5 L 0 5 L 8 8.5 z" fill={color} />
+                </marker>
+              </React.Fragment>
+            );
+          })}
         </defs>
 
-        {/* Cable Links in Clean Vector Style with Arrowheads */}
+        {/* Cable Links with Customizable Visual Mindmap Styles */}
         {visibleLinks.map((link) => {
           const src = visibleNodes.find((n) => n.id === link.sourceNodeId);
           const tgt = visibleNodes.find((n) => n.id === link.targetNodeId);
           if (!src || !tgt) return null;
 
           const isSelected = selectedLinkId === link.id;
-          const stroke = getLinkStroke(link.type);
+          const stroke = getLinkStroke(link);
+          const cleanColorId = stroke.color.replace(/[^a-zA-Z0-9]/g, '');
 
           // Source exit from connector dot (right side of card)
           const srcX = src.x + 64;
@@ -586,9 +759,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           const tgtX = tgt.x >= src.x ? tgt.x + 12 : tgt.x + 64;
           const tgtY = tgt.y + 28;
 
-          const pathD = `M ${srcX} ${srcY} L ${tgtX} ${tgtY}`;
+          const pathD = calculatePath(srcX, srcY, tgtX, tgtY, stroke.lineStyle);
           const midX = (srcX + tgtX) / 2;
           const midY = (srcY + tgtY) / 2;
+
+          const hasEndArrow = stroke.arrowType === 'end' || stroke.arrowType === 'both';
+          const hasStartArrow = stroke.arrowType === 'both';
 
           return (
             <g key={link.id} className="cursor-pointer pointer-events-auto group" onClick={(e) => { e.stopPropagation(); onSelectLink(link.id); }}>
@@ -597,7 +773,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 d={pathD}
                 fill="none"
                 stroke="transparent"
-                strokeWidth={20}
+                strokeWidth={24}
               />
 
               {/* Selection / Hover Glow */}
@@ -606,13 +782,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   d={pathD}
                   fill="none"
                   stroke={stroke.color}
-                  strokeWidth={stroke.width + 4}
+                  strokeWidth={stroke.width + 5}
                   opacity={0.6}
                   filter="url(#glow)"
                 />
               )}
 
-              {/* Dark outline */}
+              {/* Dark outline for crisp contrast on dark theme */}
               <path
                 d={pathD}
                 fill="none"
@@ -626,10 +802,11 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 d={pathD}
                 fill="none"
                 stroke={stroke.color}
-                strokeWidth={isSelected ? stroke.width + 1 : stroke.width}
+                strokeWidth={isSelected ? stroke.width + 1.2 : stroke.width}
                 strokeDasharray={stroke.strokeDash}
                 strokeLinecap="round"
-                markerEnd={`url(#arrow-${link.type || 'default'})`}
+                markerEnd={hasEndArrow ? `url(#arrow-end-${cleanColorId})` : undefined}
+                markerStart={hasStartArrow ? `url(#arrow-start-${cleanColorId})` : undefined}
                 className={`transition-all duration-100 ${isSimulationMode ? 'animate-pulse' : ''} group-hover:brightness-125`}
               />
 
@@ -667,7 +844,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   textAnchor="middle"
                   className="pointer-events-none"
                 >
-                  {link.label || stroke.label}
+                  {stroke.label}
                 </text>
 
                 {/* Delete button on selection */}
@@ -689,7 +866,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           );
         })}
 
-        {/* Temporary connecting line when dragging a new cable (Clean Instant Responsive Vector Line with Arrow) */}
+        {/* Temporary connecting line when dragging a new link */}
         {connectingSourceNode && (
           <g className="pointer-events-none">
             {(() => {
@@ -705,31 +882,34 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               }
 
               const isConnectedTarget = Boolean(hoveredTargetNode);
-              const lineColor = isConnectedTarget ? '#10b981' : '#facc15';
-              const markerId = isConnectedTarget ? 'arrow-green' : 'arrow-yellow';
+              const lineColor = isConnectedTarget ? '#10b981' : (activeLineConfig?.strokeColor || '#facc15');
+              const cleanColorId = lineColor.replace(/[^a-zA-Z0-9]/g, '');
+              const strokeDash = activeLineConfig?.strokeDash === 'dashed' ? '6,5' : activeLineConfig?.strokeDash === 'dotted' ? '2,4' : undefined;
+              const strokeWidth = activeLineConfig?.strokeWidth || 3;
+              const lineStyle = activeLineConfig?.lineStyle || 'straight';
+
+              const dragPathD = calculatePath(startX, startY, endX, endY, lineStyle);
 
               return (
                 <g>
                   {/* Subtle dark backdrop for high visibility on any dark canvas background */}
-                  <line
-                    x1={startX}
-                    y1={startY}
-                    x2={endX}
-                    y2={endY}
+                  <path
+                    d={dragPathD}
+                    fill="none"
                     stroke="#020617"
-                    strokeWidth={5}
+                    strokeWidth={strokeWidth + 3}
                     strokeLinecap="round"
                   />
 
                   {/* Clean Responsive Vector Drag Line */}
-                  <line
-                    x1={startX}
-                    y1={startY}
-                    x2={endX}
-                    y2={endY}
+                  <path
+                    d={dragPathD}
+                    fill="none"
                     stroke={lineColor}
-                    strokeWidth={2.5}
-                    markerEnd={`url(#${markerId})`}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={strokeDash}
+                    markerEnd={activeLineConfig?.arrowType !== 'none' ? `url(#arrow-end-${cleanColorId})` : undefined}
+                    markerStart={activeLineConfig?.arrowType === 'both' ? `url(#arrow-start-${cleanColorId})` : undefined}
                     strokeLinecap="round"
                   />
 
@@ -754,13 +934,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md border border-orange-500/80 shadow-2xl rounded-2xl px-4 py-2 flex items-center gap-3 text-white text-xs select-none pointer-events-auto">
           <div className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-ping shrink-0" />
           <span>
-            Arraste até outro equipamento para ligar o cabo <strong className="text-orange-400">{(selectedCableType || 'fiber_sm').toUpperCase()}</strong>
+            Arraste até outro equipamento para criar a ligação <strong className="text-orange-400">{activeLineConfig?.strokeColor || 'personalizada'}</strong>
           </span>
           <button
             type="button"
             onClick={() => {
               setConnectingSourceId(null);
-              setDraggedCableStartPos(null);
               setHoveredTargetNodeId(null);
             }}
             className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-600 cursor-pointer ml-1 transition-colors"
@@ -770,7 +949,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         </div>
       )}
 
-      {/* HTML DOM Layer for Clean Item Nodes (PNG Image + Item Name) */}
+      {/* 3. HTML DOM Layer for Equipment Node Cards (PNG Icon + Item Name + IP + MAC) */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -844,9 +1023,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   title={`Status: ${node.status}`}
                 />
 
-                {/* Right Port Connector Dot (Bolinha com centro branco exatamente como na imagem) */}
+                {/* Right Port Connector Dot (Bolinha com centro branco exatamente como na imagem de referência) */}
                 <div
-                  onMouseDown={(e) => handleStartCableDrag(e, node.id, 'right')}
+                  onMouseDown={(e) => handleStartCableDrag(e, node.id)}
                   onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
                   className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
                     isConnectSource

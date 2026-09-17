@@ -4,7 +4,7 @@ import {
   FlaskConical, 
   CheckCircle2 
 } from 'lucide-react';
-import { NetworkNode, NetworkLink, SimulationPacket, LinkType, TopologyData, NetworkFolder } from '../../../types/network';
+import { NetworkNode, NetworkLink, SimulationPacket, LinkType, TopologyData, NetworkFolder, CanvasShape, LinkStyleConfig } from '../../../types/network';
 import { INITIAL_TOPOLOGY, INITIAL_FOLDERS, DEVICE_CATALOG } from './initialNetworkData';
 import { DocumentacaoRedeView } from './DocumentacaoRedeView';
 import { OficinaTestesView } from './OficinaTestesView';
@@ -46,7 +46,7 @@ export const RedeModule: React.FC = () => {
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
-  // Topology state (Nodes and Links)
+  // Topology state (Nodes, Links, and Shapes)
   const [nodes, setNodes] = useState<NetworkNode[]>(() => {
     try {
       const saved = localStorage.getItem('operafacil_network_topology');
@@ -75,6 +75,19 @@ export const RedeModule: React.FC = () => {
     return INITIAL_TOPOLOGY.links;
   });
 
+  const [shapes, setShapes] = useState<CanvasShape[]>(() => {
+    try {
+      const saved = localStorage.getItem('operafacil_network_topology');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.shapes && Array.isArray(parsed.shapes)) {
+          return parsed.shapes;
+        }
+      }
+    } catch {}
+    return [];
+  });
+
   // Selection state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
@@ -91,9 +104,10 @@ export const RedeModule: React.FC = () => {
         const cloudTopo = await supabaseService.fetchNetworkTopology();
         if (cloudTopo && (cloudTopo.folders.length > 0 || cloudTopo.nodes.length > 0 || cloudTopo.links.length > 0)) {
           if (!isMockData(cloudTopo)) {
-            setFolders(cloudTopo.folders);
-            setNodes(cloudTopo.nodes);
-            setLinks(cloudTopo.links);
+            setFolders(cloudTopo.folders || []);
+            setNodes(cloudTopo.nodes || []);
+            setLinks(cloudTopo.links || []);
+            if ((cloudTopo as any).shapes) setShapes((cloudTopo as any).shapes || []);
             localStorage.setItem('operafacil_network_topology', JSON.stringify(cloudTopo));
           }
         } else {
@@ -122,6 +136,7 @@ export const RedeModule: React.FC = () => {
           setFolders(fresh.folders || []);
           setNodes(fresh.nodes || []);
           setLinks(fresh.links || []);
+          if ((fresh as any).shapes) setShapes((fresh as any).shapes || []);
           localStorage.setItem('operafacil_network_topology', JSON.stringify(fresh));
         }
       })
@@ -132,7 +147,7 @@ export const RedeModule: React.FC = () => {
     };
   }, []);
 
-  // Automatic persistence (localStorage + Supabase Cloud) whenever folders, nodes, or links change
+  // Automatic persistence (localStorage + Supabase Cloud) whenever folders, nodes, links, or shapes change
   useEffect(() => {
     if (isInitialLoad.current) {
       isInitialLoad.current = false;
@@ -148,11 +163,12 @@ export const RedeModule: React.FC = () => {
       folders,
       nodes,
       links,
+      shapes,
     };
 
     localStorage.setItem('operafacil_network_topology', JSON.stringify(topo));
     supabaseService.saveNetworkTopology(topo).catch(console.error);
-  }, [folders, nodes, links]);
+  }, [folders, nodes, links, shapes]);
 
   // Save topology manually (with visual toast)
   const handleSaveTopology = () => {
@@ -250,25 +266,50 @@ export const RedeModule: React.FC = () => {
     setSelectedNodeId(newNode.id);
   };
 
-  // Add Link / Cable
-  const handleAddLink = (sourceNodeId: string, targetNodeId: string, linkType: LinkType) => {
-    const existing = links.find(
-      (l) => (l.sourceNodeId === sourceNodeId && l.targetNodeId === targetNodeId) ||
-             (l.sourceNodeId === targetNodeId && l.targetNodeId === sourceNodeId)
-    );
-    if (existing) return;
+  // Add Link / Cable with Optional Custom Style
+  const handleAddLink = (
+    sourceNodeId?: string,
+    targetNodeId?: string,
+    linkType: LinkType = 'fiber_sm',
+    customStyle?: LinkStyleConfig,
+    startPoint?: { x: number; y: number },
+    endPoint?: { x: number; y: number }
+  ) => {
+    if (sourceNodeId && targetNodeId) {
+      const existing = links.find(
+        (l) => (l.sourceNodeId === sourceNodeId && l.targetNodeId === targetNodeId) ||
+               (l.sourceNodeId === targetNodeId && l.targetNodeId === sourceNodeId)
+      );
+      if (existing) return;
+    }
 
     const newLink: NetworkLink = {
-      id: `link-${Date.now()}`,
+      id: `link-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       sourceNodeId,
       targetNodeId,
+      startPoint,
+      endPoint,
       type: linkType,
       speed: linkType === 'fiber_sm' ? '10 Gbps' : linkType === 'utp_cat6' ? '1 Gbps' : '1 Gbps FTTH',
       status: 'active',
-      label: linkType === 'fiber_sm' ? 'Fibra 10G' : linkType === 'fiber_drop' ? 'Drop FTTH' : 'Cabo UTP',
+      label: customStyle?.strokeColor ? '' : (linkType === 'fiber_sm' ? 'Fibra 10G' : linkType === 'fiber_drop' ? 'Drop FTTH' : 'Cabo UTP'),
+      style: customStyle,
     };
 
     setLinks((prev) => [...prev, newLink]);
+  };
+
+  // Shape Handlers
+  const handleAddShape = (shape: CanvasShape) => {
+    setShapes((prev) => [...prev, shape]);
+  };
+
+  const handleUpdateShape = (updatedShape: CanvasShape) => {
+    setShapes((prev) => prev.map((s) => (s.id === updatedShape.id ? updatedShape : s)));
+  };
+
+  const handleDeleteShape = (shapeId: string) => {
+    setShapes((prev) => prev.filter((s) => s.id !== shapeId));
   };
 
   // Move Node
@@ -526,6 +567,7 @@ export const RedeModule: React.FC = () => {
           folders={folders}
           nodes={nodes}
           links={links}
+          shapes={shapes}
           selectedFolderId={selectedFolderId}
           selectedNodeId={selectedNodeId}
           selectedLinkId={selectedLinkId}
@@ -542,6 +584,9 @@ export const RedeModule: React.FC = () => {
           onDeleteLink={handleDeleteLink}
           onAddDevice={handleAddDevice}
           onAddLink={handleAddLink}
+          onAddShape={handleAddShape}
+          onUpdateShape={handleUpdateShape}
+          onDeleteShape={handleDeleteShape}
           onMoveNode={handleMoveNode}
           onSaveTopology={handleSaveTopology}
           onExportJson={handleExportJson}

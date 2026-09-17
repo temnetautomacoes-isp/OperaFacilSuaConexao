@@ -144,12 +144,23 @@ export interface NetworkNode {
   imageUrl?: string;
 }
 
+export interface LinkStyleConfig {
+  strokeColor?: string;
+  strokeDash?: 'solid' | 'dashed' | 'dotted';
+  strokeWidth?: number;
+  hasArrow?: boolean;
+  arrowType?: 'end' | 'both' | 'none';
+  lineStyle?: 'straight' | 'curved' | 'stepped';
+}
+
 export interface NetworkLink {
   id: string;
-  sourceNodeId: string;
+  sourceNodeId?: string;
   sourcePortId?: string;
-  targetNodeId: string;
+  targetNodeId?: string;
   targetPortId?: string;
+  startPoint?: { x: number; y: number };
+  endPoint?: { x: number; y: number };
   type: LinkType;
   label?: string;
   speed?: string; // Ex: 10 Gbps, 1 Gbps, 2.5 Gbps PON
@@ -157,6 +168,23 @@ export interface NetworkLink {
   lossDb?: number; // Atenuação medida em dB
   status: 'active' | 'degraded' | 'down';
   notes?: string;
+  style?: LinkStyleConfig;
+}
+
+export interface CanvasShape {
+  id: string;
+  type: 'rectangle' | 'circle' | 'sticky_note' | 'text_label';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label?: string;
+  color?: string; // fill color
+  borderColor?: string;
+  borderStyle?: 'solid' | 'dashed' | 'dotted';
+  borderWidth?: number;
+  textColor?: string;
+  fontSize?: number;
 }
 
 export interface TopologyData {
@@ -166,6 +194,7 @@ export interface TopologyData {
   folders?: NetworkFolder[];
   nodes: NetworkNode[];
   links: NetworkLink[];
+  shapes?: CanvasShape[];
   updatedAt: string;
   gridSnap?: boolean;
 }

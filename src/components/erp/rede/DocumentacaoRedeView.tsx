@@ -20,9 +20,20 @@ import {
   ChevronRight,
   ShieldCheck,
   FolderPlus,
-  Boxes
+  Boxes,
+  Share2,
+  Square,
+  Circle,
+  StickyNote,
+  Type,
+  ArrowRight,
+  ArrowLeftRight,
+  Minus,
+  Sparkles,
+  Palette,
+  X
 } from 'lucide-react';
-import { NetworkFolder, NetworkNode, NetworkLink, LinkType } from '../../../types/network';
+import { NetworkFolder, NetworkNode, NetworkLink, LinkType, CanvasShape, LinkStyleConfig } from '../../../types/network';
 import { FolderTreeSidebar } from './FolderTreeSidebar';
 import { NetworkCanvas } from './NetworkCanvas';
 import { DeviceInspector } from './DeviceInspector';
@@ -34,6 +45,7 @@ interface DocumentacaoRedeViewProps {
   folders: NetworkFolder[];
   nodes: NetworkNode[];
   links: NetworkLink[];
+  shapes?: CanvasShape[];
   selectedFolderId: string | null;
   selectedNodeId: string | null;
   selectedLinkId: string | null;
@@ -49,17 +61,39 @@ interface DocumentacaoRedeViewProps {
   onUpdateLink: (link: NetworkLink) => void;
   onDeleteLink: (linkId: string) => void;
   onAddDevice: (stencil: typeof DEVICE_CATALOG[0]) => void;
-  onAddLink: (sourceNodeId: string, targetNodeId: string, linkType: LinkType) => void;
+  onAddLink: (
+    sourceNodeId?: string,
+    targetNodeId?: string,
+    linkType?: LinkType,
+    customStyle?: LinkStyleConfig,
+    startPoint?: { x: number; y: number },
+    endPoint?: { x: number; y: number }
+  ) => void;
+  onAddShape?: (shape: CanvasShape) => void;
+  onUpdateShape?: (shape: CanvasShape) => void;
+  onDeleteShape?: (shapeId: string) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
   onSaveTopology: () => void;
   onExportJson: () => void;
   onOpenCli: (node: NetworkNode) => void;
 }
 
+const PALETTE_COLORS = [
+  { label: 'Amarelo', hex: '#facc15' },
+  { label: 'Laranja', hex: '#f97316' },
+  { label: 'Azul', hex: '#38bdf8' },
+  { label: 'Verde', hex: '#34d399' },
+  { label: 'Roxo', hex: '#c084fc' },
+  { label: 'Vermelho', hex: '#ef4444' },
+  { label: 'Ciano', hex: '#06b6d4' },
+  { label: 'Branco', hex: '#ffffff' },
+];
+
 export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   folders,
   nodes,
   links,
+  shapes = [],
   selectedFolderId,
   selectedNodeId,
   selectedLinkId,
@@ -76,14 +110,26 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   onDeleteLink,
   onAddDevice,
   onAddLink,
+  onAddShape,
+  onUpdateShape,
+  onDeleteShape,
   onMoveNode,
   onSaveTopology,
   onExportJson,
   onOpenCli,
 }) => {
   const [viewMode, setViewMode] = useState<'canvas' | 'table'>('canvas');
-  const [selectedCableType, setSelectedCableType] = useState<string>('fiber_sm');
-  const [isConnectingMode, setIsConnectingMode] = useState(false);
+  const [isLigacaoMenuOpen, setIsLigacaoMenuOpen] = useState(false);
+  const [lineConfig, setLineConfig] = useState<LinkStyleConfig>({
+    strokeColor: '#facc15',
+    strokeDash: 'solid',
+    strokeWidth: 2.5,
+    hasArrow: true,
+    arrowType: 'end',
+    lineStyle: 'straight',
+  });
+  const [canvasTool, setCanvasTool] = useState<'select' | 'draw_link' | 'add_shape'>('select');
+
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
@@ -94,6 +140,40 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   const handleOpenAddAssetToRack = (rackNode: NetworkNode, slotU?: number) => {
     setTargetRackForNewAsset({ rack: rackNode, slotU });
     setIsAddDeviceModalOpen(true);
+  };
+
+  const handleCreateShape = (type: CanvasShape['type']) => {
+    if (!onAddShape) return;
+    // Calculate center coordinates in current canvas view
+    const spawnX = Math.round((-panOffset.x + 300) / zoom);
+    const spawnY = Math.round((-panOffset.y + 200) / zoom);
+
+    const defaultColors: Record<string, { fill: string; border: string; text: string; width: number; height: number }> = {
+      rectangle: { fill: 'rgba(30, 41, 59, 0.4)', border: lineConfig.strokeColor || '#facc15', text: '#f8fafc', width: 220, height: 140 },
+      circle: { fill: 'rgba(56, 189, 248, 0.15)', border: '#38bdf8', text: '#f8fafc', width: 160, height: 160 },
+      sticky_note: { fill: '#fef08a', border: '#eab308', text: '#1e293b', width: 160, height: 140 },
+      text_label: { fill: 'transparent', border: 'transparent', text: '#f8fafc', width: 180, height: 40 },
+    };
+
+    const cfg = defaultColors[type] || defaultColors.rectangle;
+
+    const newShape: CanvasShape = {
+      id: `shape-${Date.now()}`,
+      type,
+      x: spawnX,
+      y: spawnY,
+      width: cfg.width,
+      height: cfg.height,
+      label: type === 'rectangle' ? 'ÁREA / ZONA POP' : type === 'circle' ? 'Zona de Cobertura' : type === 'sticky_note' ? 'Anotação / Observações' : 'Título de Rede',
+      color: cfg.fill,
+      borderColor: cfg.border,
+      borderStyle: lineConfig.strokeDash || 'solid',
+      borderWidth: 2,
+      textColor: cfg.text,
+      fontSize: type === 'text_label' ? 14 : 12,
+    };
+
+    onAddShape(newShape);
   };
 
   const activeFolder = folders.find(f => f.id === selectedFolderId) || folders[0] || null;
@@ -117,7 +197,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   return (
     <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden bg-slate-100 relative">
       {/* Sub-header / Documentacao Controls */}
-      <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 select-none z-10">
+      <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 select-none z-20">
         {/* Left: Breadcrumbs & Active Folder Summary */}
         <div className="flex items-center gap-2 overflow-hidden">
           <div className="flex items-center gap-1.5 font-bold text-xs text-slate-500 overflow-hidden">
@@ -179,23 +259,26 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           </button>
         </div>
 
-        {/* Right: Actions */}
+        {/* Right: Actions & Tools */}
         <div className="flex items-center gap-2">
           {viewMode === 'canvas' && (
-            <div className="hidden xl:flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-              <span className="text-[10px] font-bold text-slate-500 px-1">Cabo:</span>
-              <select
-                value={selectedCableType}
-                onChange={(e) => setSelectedCableType(e.target.value)}
-                className="bg-transparent font-bold text-slate-700 text-xs focus:outline-hidden cursor-pointer"
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsLigacaoMenuOpen(prev => !prev)}
+                className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer shadow-xs ${
+                  isLigacaoMenuOpen
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 ring-2 ring-amber-400/40'
+                    : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-700'
+                }`}
               >
-                <option value="fiber_sm">Fibra Monomodo (SM)</option>
-                <option value="fiber_mm">Fibra Multimodo (MM)</option>
-                <option value="fiber_drop">Drop FTTH Flat</option>
-                <option value="dac_10g">Cabo DAC 10G SFP+</option>
-                <option value="utp_cat6">Cabo UTP Cat6</option>
-                <option value="radio_ptp">Enlace Rádio PTP</option>
-              </select>
+                <Share2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Adicionar Ligação</span>
+                <span
+                  className="w-3 h-3 rounded-full border border-slate-900 shadow-xs"
+                  style={{ backgroundColor: lineConfig.strokeColor || '#facc15' }}
+                />
+              </button>
             </div>
           )}
 
@@ -231,6 +314,219 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
         </div>
       </div>
 
+      {/* Floating Toolbar for Adicionar Ligação & Formas */}
+      {viewMode === 'canvas' && isLigacaoMenuOpen && (
+        <div className="bg-slate-900/98 backdrop-blur-xl border-b border-slate-700/80 p-3 shadow-2xl z-20 flex flex-wrap items-center justify-between gap-4 text-white animate-in slide-in-from-top-2 duration-150">
+          <div className="flex flex-wrap items-center gap-5 text-xs">
+            {/* 1. Cores */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                <Palette className="w-3 h-3 text-amber-400" />
+                Cor:
+              </span>
+              <div className="flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+                {PALETTE_COLORS.map(c => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setLineConfig(prev => ({ ...prev, strokeColor: c.hex }))}
+                    className={`w-5 h-5 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                      lineConfig.strokeColor === c.hex ? 'scale-125 ring-2 ring-white ring-offset-2 ring-offset-slate-900' : 'hover:scale-110 opacity-80 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Traço (Sólido / Tracejado / Pontilhado) */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Traço:</span>
+              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, strokeDash: 'solid' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.strokeDash === 'solid' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Inteira
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, strokeDash: 'dashed' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.strokeDash === 'dashed' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Tracejada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, strokeDash: 'dotted' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.strokeDash === 'dotted' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Pontilhada
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Espessura */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Espessura:</span>
+              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700">
+                {[
+                  { label: 'Fina', val: 1.5 },
+                  { label: 'Média', val: 3 },
+                  { label: 'Grossa', val: 5 },
+                  { label: 'Forte', val: 8 },
+                ].map(w => (
+                  <button
+                    key={w.val}
+                    type="button"
+                    onClick={() => setLineConfig(prev => ({ ...prev, strokeWidth: w.val }))}
+                    className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                      lineConfig.strokeWidth === w.val ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Seta */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Seta:</span>
+              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, arrowType: 'end', hasArrow: true }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors flex items-center gap-1 ${
+                    lineConfig.arrowType === 'end' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Seta na Ponta"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  Ponta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, arrowType: 'both', hasArrow: true }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors flex items-center gap-1 ${
+                    lineConfig.arrowType === 'both' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Seta Dupla"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  Dupla
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, arrowType: 'none', hasArrow: false }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors flex items-center gap-1 ${
+                    lineConfig.arrowType === 'none' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Sem Seta"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                  Sem Seta
+                </button>
+              </div>
+            </div>
+
+            {/* 5. Curvatura */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Curvatura:</span>
+              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, lineStyle: 'straight' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.lineStyle === 'straight' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Reta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, lineStyle: 'curved' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.lineStyle === 'curved' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Curva
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineConfig(prev => ({ ...prev, lineStyle: 'stepped' }))}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                    lineConfig.lineStyle === 'stepped' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Ortogonal
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 6. Formas (Shapes) */}
+          <div className="flex items-center gap-2 border-t sm:border-t-0 sm:border-l border-slate-700 pt-2 sm:pt-0 sm:pl-4">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Formas:</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleCreateShape('rectangle')}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 hover:text-amber-300 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Adicionar Retângulo / Área de POP"
+              >
+                <Square className="w-3.5 h-3.5 text-amber-400" />
+                Retângulo
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreateShape('circle')}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 hover:text-sky-300 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Adicionar Círculo / Área de Cobertura"
+              >
+                <Circle className="w-3.5 h-3.5 text-sky-400" />
+                Círculo
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreateShape('sticky_note')}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 hover:text-yellow-300 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Adicionar Nota Adesiva / Post-it"
+              >
+                <StickyNote className="w-3.5 h-3.5 text-yellow-300" />
+                Nota
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreateShape('text_label')}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 hover:text-emerald-300 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Adicionar Rótulo de Texto Livre"
+              >
+                <Type className="w-3.5 h-3.5 text-emerald-400" />
+                Texto
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsLigacaoMenuOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer ml-2"
+                title="Fechar Barra de Ferramentas"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Workspace Body */}
       <div className="flex-1 min-h-0 h-full flex overflow-hidden relative">
         {/* Left Side: SGP TSMX Folder Tree */}
@@ -260,6 +556,11 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             nodes={nodes}
             links={links}
             folders={folders}
+            shapes={shapes}
+            onAddShape={onAddShape}
+            onUpdateShape={onUpdateShape}
+            onDeleteShape={onDeleteShape}
+            activeLineConfig={lineConfig}
             selectedNodeId={selectedNodeId}
             selectedLinkId={selectedLinkId}
             onSelectNode={onSelectNode}
