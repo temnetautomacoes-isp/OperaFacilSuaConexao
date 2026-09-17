@@ -1116,26 +1116,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   }`}
                   title={`Status: ${node.status}`}
                 />
-
-                {/* Right Port Connector Dot */}
-                {!isDrawingPathMode && (
-                  <div
-                    onMouseDown={(e) => handleStartCableDrag(e, node.id)}
-                    onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
-                    className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
-                      isConnectSource
-                        ? 'ring-4 ring-yellow-400 scale-125 animate-pulse bg-orange-500'
-                        : isTargetHovered
-                        ? 'ring-4 ring-emerald-400 scale-135 bg-emerald-500'
-                        : connectingSourceId
-                        ? 'ring-2 ring-emerald-400/80 scale-110 opacity-100'
-                        : 'hover:scale-125 hover:ring-2 hover:ring-yellow-400/80'
-                    }`}
-                    title="Clique e arraste para ligar cabo a outro equipamento"
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs pointer-events-none" />
-                  </div>
-                )}
               </div>
 
               {/* Node Name & Subtitle Badge */}
@@ -1179,10 +1159,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       </div>
 
       {/* ======================================================== */}
-      {/* 3. SVG CANVAS LAYER (Z-INDEX 15: SOBREPÕE O MAPA E NÓS)   */}
+      {/* 3. SVG CANVAS LAYER (Z-INDEX 8: RENDERIZADO ATRÁS DOS EQUIPAMENTOS) */}
       {/* ======================================================== */}
       <svg
-        className="absolute inset-0 w-full h-full pointer-events-none z-15"
+        className="absolute inset-0 w-full h-full pointer-events-none z-8"
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
@@ -1253,9 +1233,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
             const tgt = visibleNodes.find((n) => n.id === link.targetNodeId);
             if (!src || !tgt) return null;
 
-            const srcX = src.x + 64;
+            const srcX = src.x + 45;
             const srcY = src.y + 28;
-            const tgtX = tgt.x >= src.x ? tgt.x + 12 : tgt.x + 64;
+            const tgtX = tgt.x + 45;
             const tgtY = tgt.y + 28;
 
             startPt = { x: srcX, y: srcY };
@@ -1311,16 +1291,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 markerEnd={hasEndArrow ? `url(#arrow-end-${cleanColorId})` : undefined}
                 markerStart={hasStartArrow ? `url(#arrow-start-${cleanColorId})` : undefined}
                 className={`transition-all duration-100 ${isSimulationMode ? 'animate-pulse' : ''} group-hover:brightness-125`}
-              />
-
-              {/* Start Dot on Source Port or first waypoint */}
-              <circle
-                cx={startPt.x}
-                cy={startPt.y}
-                r={4.5}
-                fill={stroke.color}
-                stroke="#ffffff"
-                strokeWidth={1.5}
               />
 
               {/* Render waypoints circles when link is selected */}
