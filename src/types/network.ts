@@ -161,6 +161,7 @@ export interface NetworkLink {
   targetPortId?: string;
   startPoint?: { x: number; y: number };
   endPoint?: { x: number; y: number };
+  points?: Array<{ x: number; y: number }>;
   type: LinkType;
   label?: string;
   speed?: string; // Ex: 10 Gbps, 1 Gbps, 2.5 Gbps PON

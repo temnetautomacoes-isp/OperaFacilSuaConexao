@@ -31,7 +31,8 @@ import {
   Minus,
   Sparkles,
   Palette,
-  X
+  X,
+  Pencil
 } from 'lucide-react';
 import { NetworkFolder, NetworkNode, NetworkLink, LinkType, CanvasShape, LinkStyleConfig } from '../../../types/network';
 import { FolderTreeSidebar } from './FolderTreeSidebar';
@@ -128,6 +129,7 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
     arrowType: 'end',
     lineStyle: 'straight',
   });
+  const [isDrawingPathMode, setIsDrawingPathMode] = useState(false);
   const [canvasTool, setCanvasTool] = useState<'select' | 'draw_link' | 'add_shape'>('select');
 
   const [zoom, setZoom] = useState(1);
@@ -514,10 +516,28 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
                 Texto
               </button>
 
+              <div className="h-6 w-px bg-slate-700 mx-1" />
+
+              {/* 7. Modo Desenhar Traçado / Google Earth */}
+              <button
+                type="button"
+                onClick={() => setIsDrawingPathMode(prev => !prev)}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 border transition-all cursor-pointer shadow-xs ${
+                  isDrawingPathMode
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 ring-2 ring-amber-400/50 animate-pulse'
+                    : 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700'
+                }`}
+                title="Clique no mapa para criar pontos do traçado estilo Google Earth. Duplo-clique ou Enter para finalizar."
+              >
+                <Pencil className="w-3.5 h-3.5 text-amber-400" />
+                <span>Desenhar Traçado</span>
+                {isDrawingPathMode && <span className="text-[9px] bg-black/50 text-amber-200 px-1.5 py-0.2 rounded-full font-black">ATIVO</span>}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsLigacaoMenuOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer ml-2"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer ml-1"
                 title="Fechar Barra de Ferramentas"
               >
                 <X className="w-4 h-4" />
@@ -561,6 +581,8 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
             onUpdateShape={onUpdateShape}
             onDeleteShape={onDeleteShape}
             activeLineConfig={lineConfig}
+            isDrawingPathMode={isDrawingPathMode}
+            onToggleDrawingPathMode={() => setIsDrawingPathMode(prev => !prev)}
             selectedNodeId={selectedNodeId}
             selectedLinkId={selectedLinkId}
             onSelectNode={onSelectNode}

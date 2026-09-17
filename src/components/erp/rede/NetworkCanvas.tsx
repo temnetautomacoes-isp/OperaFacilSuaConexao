@@ -26,7 +26,11 @@ import {
   ZoomOut,
   RotateCcw,
   Trash2,
-  Edit3
+  Edit3,
+  Pencil,
+  Check,
+  Undo2,
+  X
 } from 'lucide-react';
 
 interface NetworkCanvasProps {
@@ -38,6 +42,8 @@ interface NetworkCanvasProps {
   onUpdateShape?: (shapeId: string, updates: Partial<CanvasShape>) => void;
   onDeleteShape?: (shapeId: string) => void;
   activeLineConfig?: LinkStyleConfig;
+  isDrawingPathMode?: boolean;
+  onToggleDrawingPathMode?: () => void;
   selectedNodeId: string | null;
   selectedLinkId: string | null;
   onSelectNode: (nodeId: string | null) => void;
@@ -45,16 +51,17 @@ interface NetworkCanvasProps {
   onSelectLink: (linkId: string | null) => void;
   onMoveNode: (nodeId: string, x: number, y: number) => void;
   onAddLink: (
-    sourceNodeId: string, 
-    targetNodeId: string, 
-    linkType: LinkType, 
+    sourceNodeId?: string, 
+    targetNodeId?: string, 
+    linkType?: LinkType, 
     customStyle?: LinkStyleConfig, 
     startPoint?: { x: number; y: number }, 
-    endPoint?: { x: number; y: number }
+    endPoint?: { x: number; y: number },
+    points?: Array<{ x: number; y: number }>
   ) => void;
   onDeleteLink?: (linkId: string) => void;
-  isSimulationMode: boolean;
-  activePackets: SimulationPacket[];
+  isSimulationMode?: boolean;
+  activePackets?: SimulationPacket[];
   zoom: number;
   panOffset: { x: number; y: number };
   onPanChange: (offset: { x: number; y: number }) => void;
@@ -75,6 +82,58 @@ const LINK_CONFIG: Record<string, { color: string; label: string; strokeDash: st
   power_cable: { color: '#f43f5e', label: 'Energia', strokeDash: 'none', width: 3 },
 };
 
+// Generate SVG Path from multiple waypoints (Google Earth style)
+export const generateSvgPathFromPoints = (
+  points: Array<{ x: number; y: number }>,
+  lineStyle: 'straight' | 'curved' | 'stepped' = 'straight'
+): string => {
+  if (!points || points.length < 2) return '';
+
+  if (lineStyle === 'straight') {
+    return points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  }
+
+  if (lineStyle === 'stepped') {
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const midX = (prev.x + cur.x) / 2;
+      d += ` H ${midX} V ${cur.y} H ${cur.x}`;
+    }
+    return d;
+  }
+
+  if (lineStyle === 'curved') {
+    if (points.length === 2) {
+      const p0 = points[0];
+      const p1 = points[1];
+      const dx = p1.x - p0.x;
+      const curvature = Math.max(30, Math.min(160, Math.abs(dx) * 0.5));
+      return `M ${p0.x} ${p0.y} C ${p0.x + curvature} ${p0.y}, ${p1.x - curvature} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+
+    // Multi-point smooth Catmull-Rom to Cubic Bezier curve
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = i > 0 ? points[i - 1] : points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = i < points.length - 2 ? points[i + 2] : p2;
+
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
+  }
+
+  return points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+};
+
 export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   nodes,
   links,
@@ -83,6 +142,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   onUpdateShape,
   onDeleteShape,
   activeLineConfig,
+  isDrawingPathMode = false,
+  onToggleDrawingPathMode,
   selectedNodeId,
   selectedLinkId,
   onSelectNode,
@@ -91,7 +152,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   onMoveNode,
   onAddLink,
   onDeleteLink,
-  isSimulationMode,
+  isSimulationMode = false,
   zoom,
   panOffset,
   onPanChange,
@@ -107,10 +168,17 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   const visibleNodes = nodes.filter(n => !n.folderId || !hiddenFolderIds.has(n.folderId));
   const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-  const visibleLinks = links.filter(l => visibleNodeIds.has(l.sourceNodeId) && visibleNodeIds.has(l.targetNodeId));
+  const visibleLinks = links.filter(l => {
+    if (l.points && l.points.length >= 2) return true;
+    if (l.sourceNodeId && l.targetNodeId) {
+      return visibleNodeIds.has(l.sourceNodeId) && visibleNodeIds.has(l.targetNodeId);
+    }
+    return true;
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Drag states
+  // Drag & Pan states
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [draggingShapeId, setDraggingShapeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -122,10 +190,15 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [editingShapeText, setEditingShapeText] = useState('');
 
-  // Connecting cable state (Drag to Connect)
+  // Connecting cable state (Drag dot to Connect)
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
   const [hoveredTargetNodeId, setHoveredTargetNodeId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Google Earth Multi-Point Drawing Path State
+  const [drawingPathPoints, setDrawingPathPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [drawingSourceNodeId, setDrawingSourceNodeId] = useState<string | null>(null);
+  const [drawingTargetNodeId, setDrawingTargetNodeId] = useState<string | null>(null);
 
   // Handle Mouse Wheel Zoom (centered at mouse position)
   useEffect(() => {
@@ -157,19 +230,53 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     };
   }, [zoom, panOffset, onPanChange, onZoomChange]);
 
-  // Global window listeners for drag & pan & cable dragging
-  useEffect(() => {
-    if (!draggingNodeId && !draggingShapeId && !isPanning && !connectingSourceId) return;
+  // Finish Path Drawing (Create Polyline NetworkLink)
+  const handleFinishDrawingPath = () => {
+    if (drawingPathPoints.length >= 2) {
+      onAddLink(
+        drawingSourceNodeId || undefined,
+        drawingTargetNodeId || undefined,
+        (selectedCableType || 'fiber_sm') as LinkType,
+        activeLineConfig,
+        drawingPathPoints[0],
+        drawingPathPoints[drawingPathPoints.length - 1],
+        drawingPathPoints
+      );
+    }
+    setDrawingPathPoints([]);
+    setDrawingSourceNodeId(null);
+    setDrawingTargetNodeId(null);
+    if (onToggleDrawingPathMode) {
+      onToggleDrawingPathMode();
+    }
+  };
 
+  // Undo last drawn point
+  const handleUndoDrawPoint = () => {
+    setDrawingPathPoints(prev => prev.slice(0, -1));
+  };
+
+  // Cancel Drawing Path
+  const handleCancelDrawingPath = () => {
+    setDrawingPathPoints([]);
+    setDrawingSourceNodeId(null);
+    setDrawingTargetNodeId(null);
+    if (onToggleDrawingPathMode) {
+      onToggleDrawingPathMode();
+    }
+  };
+
+  // Global window listeners for drag, pan & keyboard shortcuts
+  useEffect(() => {
     const onWindowMouseMove = (e: MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      if (connectingSourceId) {
-        const curX = (e.clientX - rect.left - panOffset.x) / zoom;
-        const curY = (e.clientY - rect.top - panOffset.y) / zoom;
-        setMousePos({ x: Math.round(curX), y: Math.round(curY) });
+      const curX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+      setMousePos({ x: Math.round(curX), y: Math.round(curY) });
 
+      if (connectingSourceId) {
         // Generous target node detection (radial and bounding box)
         const hovered = visibleNodes.find(n => {
           if (n.id === connectingSourceId) return false;
@@ -189,8 +296,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       }
 
       if (draggingNodeId) {
-        let newX = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
-        let newY = (e.clientY - rect.top - panOffset.y) / zoom - dragOffset.y;
+        let newX = curX - dragOffset.x;
+        let newY = curY - dragOffset.y;
 
         // Snap to 20px grid
         newX = Math.round(newX / 20) * 20;
@@ -200,8 +307,8 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       }
 
       if (draggingShapeId && onUpdateShape) {
-        let newX = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
-        let newY = (e.clientY - rect.top - panOffset.y) / zoom - dragOffset.y;
+        let newX = curX - dragOffset.x;
+        let newY = curY - dragOffset.y;
 
         newX = Math.round(newX / 10) * 10;
         newY = Math.round(newY / 10) * 10;
@@ -216,30 +323,27 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       setDraggingShapeId(null);
 
       if (connectingSourceId) {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (rect) {
-          const curX = mousePos.x;
-          const curY = mousePos.y;
+        const curX = mousePos.x;
+        const curY = mousePos.y;
 
-          // Connect if dropped over target node
-          let target = hoveredTargetNodeId ? visibleNodes.find(n => n.id === hoveredTargetNodeId) : null;
-          if (!target) {
-            target = visibleNodes.find(n => {
-              if (n.id === connectingSourceId) return false;
-              const withinBox = curX >= n.x - 30 && curX <= n.x + 120 && curY >= n.y - 30 && curY <= n.y + 130;
-              const withinRadius = Math.hypot(curX - (n.x + 45), curY - (n.y + 28)) <= 85;
-              return withinBox || withinRadius;
-            }) || null;
-          }
+        // Connect if dropped over target node
+        let target = hoveredTargetNodeId ? visibleNodes.find(n => n.id === hoveredTargetNodeId) : null;
+        if (!target) {
+          target = visibleNodes.find(n => {
+            if (n.id === connectingSourceId) return false;
+            const withinBox = curX >= n.x - 30 && curX <= n.x + 120 && curY >= n.y - 30 && curY <= n.y + 130;
+            const withinRadius = Math.hypot(curX - (n.x + 45), curY - (n.y + 28)) <= 85;
+            return withinBox || withinRadius;
+          }) || null;
+        }
 
-          if (target && target.id !== connectingSourceId) {
-            onAddLink(
-              connectingSourceId, 
-              target.id, 
-              (selectedCableType || 'fiber_sm') as LinkType,
-              activeLineConfig
-            );
-          }
+        if (target && target.id !== connectingSourceId) {
+          onAddLink(
+            connectingSourceId, 
+            target.id, 
+            (selectedCableType || 'fiber_sm') as LinkType,
+            activeLineConfig
+          );
         }
         setConnectingSourceId(null);
         setHoveredTargetNodeId(null);
@@ -248,9 +352,20 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (drawingPathPoints.length > 0 || isDrawingPathMode) {
+          handleCancelDrawingPath();
+        }
         setConnectingSourceId(null);
         setHoveredTargetNodeId(null);
         setEditingShapeId(null);
+      } else if (e.key === 'Enter') {
+        if (isDrawingPathMode && drawingPathPoints.length >= 2) {
+          handleFinishDrawingPath();
+        }
+      } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+        if (isDrawingPathMode && drawingPathPoints.length > 0) {
+          handleUndoDrawPoint();
+        }
       }
     };
 
@@ -272,6 +387,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     visibleNodes, 
     selectedCableType, 
     activeLineConfig, 
+    isDrawingPathMode,
+    drawingPathPoints,
+    drawingSourceNodeId,
+    drawingTargetNodeId,
     onAddLink, 
     panStart, 
     panOffset, 
@@ -283,13 +402,28 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     onUpdateShape
   ]);
 
-  // Handle Canvas Mouse Down (Pan canvas or deselect)
+  // Handle Canvas Mouse Down (Click to draw points in Google Earth mode or Pan canvas)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (connectingSourceId) {
       setConnectingSourceId(null);
       setHoveredTargetNodeId(null);
       return;
     }
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const clickX = Math.round((e.clientX - rect.left - panOffset.x) / zoom);
+    const clickY = Math.round((e.clientY - rect.top - panOffset.y) / zoom);
+
+    // If Google Earth Drawing Path Mode is active, clicking adds a vertex!
+    if (isDrawingPathMode) {
+      if (e.button === 0) {
+        setDrawingPathPoints(prev => [...prev, { x: clickX, y: clickY }]);
+        return;
+      }
+    }
+
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
       if (e.button === 0 || e.button === 1) {
         setIsPanning(true);
@@ -302,13 +436,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
-  // Handle Mouse Move (Local cursor tracking for wire connections)
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect && connectingSourceId) {
-      const curX = (e.clientX - rect.left - panOffset.x) / zoom;
-      const curY = (e.clientY - rect.top - panOffset.y) / zoom;
-      setMousePos({ x: Math.round(curX), y: Math.round(curY) });
+  // Handle Canvas Double Click (Completes drawing path if in draw mode)
+  const handleCanvasDoubleClick = () => {
+    if (isDrawingPathMode && drawingPathPoints.length >= 2) {
+      handleFinishDrawingPath();
     }
   };
 
@@ -324,9 +455,25 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     setMousePos({ x: startX, y: startY });
   };
 
-  // Handle Node Mouse Down (Single click for select & drag, or connecting link)
+  // Handle Node Mouse Down (Single click for select & drag, or connecting link / path point)
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
+
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node || !containerRef.current) return;
+
+    // If in Google Earth Drawing Mode, clicking on a node snaps to node connector point
+    if (isDrawingPathMode) {
+      const snapX = node.x + 64;
+      const snapY = node.y + 28;
+      if (drawingPathPoints.length === 0) {
+        setDrawingSourceNodeId(nodeId);
+      } else {
+        setDrawingTargetNodeId(nodeId);
+      }
+      setDrawingPathPoints(prev => [...prev, { x: snapX, y: snapY }]);
+      return;
+    }
 
     // If currently in connection mode, clicking this node completes the link
     if (connectingSourceId) {
@@ -347,9 +494,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       setConnectingSourceId(nodeId);
       return;
     }
-
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node || !containerRef.current) return;
 
     onSelectNode(nodeId);
     setSelectedShapeId(null);
@@ -399,6 +543,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
   // Handle Shape Mouse Down
   const handleShapeMouseDown = (e: React.MouseEvent, shape: CanvasShape) => {
+    if (isDrawingPathMode) {
+      // In drawing mode, allow clicking through to add point
+      return;
+    }
     e.stopPropagation();
     setSelectedShapeId(shape.id);
     onSelectNode(null);
@@ -424,32 +572,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     setEditingShapeId(null);
   };
 
-  // Calculate Link SVG Path according to curvature
-  const calculatePath = (
-    srcX: number, 
-    srcY: number, 
-    tgtX: number, 
-    tgtY: number, 
-    lineStyle: 'straight' | 'curved' | 'stepped' = 'straight'
-  ) => {
-    if (lineStyle === 'curved') {
-      const dx = tgtX - srcX;
-      const curvature = Math.max(35, Math.min(160, Math.abs(dx) * 0.5));
-      const cp1x = srcX + curvature;
-      const cp1y = srcY;
-      const cp2x = tgtX - curvature;
-      const cp2y = tgtY;
-      return `M ${srcX} ${srcY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tgtX} ${tgtY}`;
-    }
-
-    if (lineStyle === 'stepped') {
-      const midX = (srcX + tgtX) / 2;
-      return `M ${srcX} ${srcY} H ${midX} V ${tgtY} H ${tgtX}`;
-    }
-
-    return `M ${srcX} ${srcY} L ${tgtX} ${tgtY}`;
-  };
-
   // Get Cable Link Visual Styling
   const getLinkStroke = (link: NetworkLink) => {
     const baseConfig = LINK_CONFIG[link.type] || { color: '#64748b', label: 'Cabo', strokeDash: 'none', width: 2.5 };
@@ -462,10 +584,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     else if (style?.strokeDash === 'solid') strokeDash = 'none';
 
     const width = style?.strokeWidth || baseConfig.width;
-    const arrowType = style?.arrowType !== undefined ? style.arrowType : 'end';
+    const arrowType = style?.arrowType !== undefined ? style.arrowType : (style?.hasArrow === false ? 'none' : 'end');
     const lineStyle = style?.lineStyle || 'straight';
 
-    return { color, strokeDash, width, arrowType, lineStyle, label: link.label || baseConfig.label };
+    return { color, strokeDash, width, arrowType, lineStyle, label: link.label || (link.points ? 'Traçado' : baseConfig.label) };
   };
 
   // Render Device Stencil Icon
@@ -567,8 +689,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     <div
       ref={containerRef}
       onMouseDown={handleCanvasMouseDown}
-      onMouseMove={handleMouseMove}
-      className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] cursor-${isPanning ? 'grabbing' : 'default'} select-none`}
+      onDoubleClick={handleCanvasDoubleClick}
+      className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] ${
+        isDrawingPathMode ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-default'
+      } select-none`}
       style={{
         backgroundImage: `radial-gradient(circle, #1e293b 1.2px, transparent 1.2px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
@@ -605,7 +729,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 color: shape.textColor || '#f8fafc',
                 fontSize: `${shape.fontSize || 13}px`,
               }}
-              className={`absolute pointer-events-auto rounded-2xl p-3 flex flex-col justify-between group transition-shadow select-none cursor-move ${
+              className={`absolute pointer-events-auto rounded-2xl p-3 flex flex-col justify-between group transition-shadow select-none ${
+                isDrawingPathMode ? 'pointer-events-none' : 'cursor-move'
+              } ${
                 shape.type === 'circle' ? 'rounded-full text-center flex items-center justify-center' : ''
               } ${
                 shape.type === 'sticky_note' ? 'shadow-xl text-slate-900 font-medium' : 'backdrop-blur-2xs'
@@ -693,7 +819,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         })}
       </div>
 
-      {/* 2. SVG Canvas Layer for Clean Responsive Vector Links & Custom Lines */}
+      {/* 2. SVG Canvas Layer for Clean Responsive Vector Links, Polylines & Google Earth Paths */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
@@ -741,27 +867,40 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           })}
         </defs>
 
-        {/* Cable Links with Customizable Visual Mindmap Styles */}
+        {/* Cable Links with Customizable Visual Mindmap Styles & Polyline Paths */}
         {visibleLinks.map((link) => {
-          const src = visibleNodes.find((n) => n.id === link.sourceNodeId);
-          const tgt = visibleNodes.find((n) => n.id === link.targetNodeId);
-          if (!src || !tgt) return null;
-
           const isSelected = selectedLinkId === link.id;
           const stroke = getLinkStroke(link);
           const cleanColorId = stroke.color.replace(/[^a-zA-Z0-9]/g, '');
 
-          // Source exit from connector dot (right side of card)
-          const srcX = src.x + 64;
-          const srcY = src.y + 28;
+          let pathD = '';
+          let midX = 0;
+          let midY = 0;
+          let startPt = { x: 0, y: 0 };
 
-          // Target entrance: if target is to the right of source, connect to left side; else connect to right side
-          const tgtX = tgt.x >= src.x ? tgt.x + 12 : tgt.x + 64;
-          const tgtY = tgt.y + 28;
+          // Case A: Link has custom polyline points (Google Earth multi-point path)
+          if (link.points && link.points.length >= 2) {
+            pathD = generateSvgPathFromPoints(link.points, stroke.lineStyle);
+            startPt = link.points[0];
+            const middleIdx = Math.floor(link.points.length / 2);
+            midX = link.points[middleIdx].x;
+            midY = link.points[middleIdx].y;
+          } else {
+            // Case B: Link connects two node equipment cards
+            const src = visibleNodes.find((n) => n.id === link.sourceNodeId);
+            const tgt = visibleNodes.find((n) => n.id === link.targetNodeId);
+            if (!src || !tgt) return null;
 
-          const pathD = calculatePath(srcX, srcY, tgtX, tgtY, stroke.lineStyle);
-          const midX = (srcX + tgtX) / 2;
-          const midY = (srcY + tgtY) / 2;
+            const srcX = src.x + 64;
+            const srcY = src.y + 28;
+            const tgtX = tgt.x >= src.x ? tgt.x + 12 : tgt.x + 64;
+            const tgtY = tgt.y + 28;
+
+            startPt = { x: srcX, y: srcY };
+            pathD = generateSvgPathFromPoints([{ x: srcX, y: srcY }, { x: tgtX, y: tgtY }], stroke.lineStyle);
+            midX = (srcX + tgtX) / 2;
+            midY = (srcY + tgtY) / 2;
+          }
 
           const hasEndArrow = stroke.arrowType === 'end' || stroke.arrowType === 'both';
           const hasStartArrow = stroke.arrowType === 'both';
@@ -795,6 +934,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 stroke="#020617"
                 strokeWidth={stroke.width + 2}
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
 
               {/* Main Arrow Line */}
@@ -805,20 +945,34 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 strokeWidth={isSelected ? stroke.width + 1.2 : stroke.width}
                 strokeDasharray={stroke.strokeDash}
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 markerEnd={hasEndArrow ? `url(#arrow-end-${cleanColorId})` : undefined}
                 markerStart={hasStartArrow ? `url(#arrow-start-${cleanColorId})` : undefined}
                 className={`transition-all duration-100 ${isSimulationMode ? 'animate-pulse' : ''} group-hover:brightness-125`}
               />
 
-              {/* Start Dot on Source Port */}
+              {/* Start Dot on Source Port or first waypoint */}
               <circle
-                cx={srcX}
-                cy={srcY}
+                cx={startPt.x}
+                cy={startPt.y}
                 r={3.5}
                 fill={stroke.color}
                 stroke="#ffffff"
                 strokeWidth={1}
               />
+
+              {/* Render waypoints circles when link is selected */}
+              {isSelected && link.points && link.points.map((pt, pIdx) => (
+                <circle
+                  key={pIdx}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={4}
+                  fill="#facc15"
+                  stroke="#020617"
+                  strokeWidth={1.5}
+                />
+              ))}
 
               {/* Midpoint Label Badge */}
               <g transform={`translate(${midX}, ${midY})`}>
@@ -866,7 +1020,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           );
         })}
 
-        {/* Temporary connecting line when dragging a new link */}
+        {/* Temporary connecting line when dragging a new link between nodes */}
         {connectingSourceNode && (
           <g className="pointer-events-none">
             {(() => {
@@ -888,7 +1042,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               const strokeWidth = activeLineConfig?.strokeWidth || 3;
               const lineStyle = activeLineConfig?.lineStyle || 'straight';
 
-              const dragPathD = calculatePath(startX, startY, endX, endY, lineStyle);
+              const dragPathD = generateSvgPathFromPoints([{ x: startX, y: startY }, { x: endX, y: endY }], lineStyle);
 
               return (
                 <g>
@@ -927,10 +1081,127 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
             })()}
           </g>
         )}
+
+        {/* 3. GOOGLE EARTH LIVE DRAWING PATH PREVIEW (Traçado multi-pontos em tempo real) */}
+        {isDrawingPathMode && drawingPathPoints.length > 0 && (
+          <g className="pointer-events-none">
+            {(() => {
+              const allPoints = [...drawingPathPoints, mousePos];
+              const lineColor = activeLineConfig?.strokeColor || '#facc15';
+              const cleanColorId = lineColor.replace(/[^a-zA-Z0-9]/g, '');
+              const strokeDash = activeLineConfig?.strokeDash === 'dashed' ? '6,5' : activeLineConfig?.strokeDash === 'dotted' ? '2,4' : undefined;
+              const strokeWidth = activeLineConfig?.strokeWidth || 3;
+              const lineStyle = activeLineConfig?.lineStyle || 'straight';
+
+              const livePathD = generateSvgPathFromPoints(allPoints, lineStyle);
+
+              return (
+                <g>
+                  {/* Dark Outline */}
+                  <path
+                    d={livePathD}
+                    fill="none"
+                    stroke="#020617"
+                    strokeWidth={strokeWidth + 3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Active Live Polyline */}
+                  <path
+                    d={livePathD}
+                    fill="none"
+                    stroke={lineColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={strokeDash}
+                    markerEnd={activeLineConfig?.arrowType !== 'none' ? `url(#arrow-end-${cleanColorId})` : undefined}
+                    markerStart={activeLineConfig?.arrowType === 'both' ? `url(#arrow-start-${cleanColorId})` : undefined}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Clicked Vertices Dots with Order Numbers */}
+                  {drawingPathPoints.map((pt, idx) => (
+                    <g key={idx} transform={`translate(${pt.x}, ${pt.y})`}>
+                      <circle r={6.5} fill="#f97316" stroke="#ffffff" strokeWidth={2} />
+                      <text x={0} y={3} fill="#ffffff" fontSize={8} fontWeight="900" textAnchor="middle">
+                        {idx + 1}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* Current Moving Cursor Dot */}
+                  <circle
+                    cx={mousePos.x}
+                    cy={mousePos.y}
+                    r={5}
+                    fill={lineColor}
+                    stroke="#ffffff"
+                    strokeWidth={1.5}
+                    className="animate-ping"
+                  />
+                </g>
+              );
+            })()}
+          </g>
+        )}
       </svg>
 
-      {/* Connection Mode Helper Notification Banner */}
-      {connectingSourceNode && (
+      {/* Floating Notification Banner for Google Earth Path Drawing Mode */}
+      {isDrawingPathMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/98 backdrop-blur-md border border-amber-400/90 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-3 text-white text-xs select-none pointer-events-auto animate-in slide-in-from-top-3">
+          <div className="w-3 h-3 rounded-full bg-amber-400 animate-pulse shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+            <span className="font-extrabold text-amber-300">
+              ✏️ Modo Traçado (Google Earth):
+            </span>
+            <span className="text-slate-200">
+              {drawingPathPoints.length === 0
+                ? 'Clique no mapa para marcar o 1º ponto'
+                : `${drawingPathPoints.length} ponto(s) marcado(s). Clique para continuar ou duplo clique para concluir.`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-2">
+            {drawingPathPoints.length >= 2 && (
+              <button
+                type="button"
+                onClick={handleFinishDrawingPath}
+                className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer transition-all shadow-md"
+                title="Concluir e Salvar Traçado (Enter)"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Concluir (Enter)
+              </button>
+            )}
+
+            {drawingPathPoints.length > 0 && (
+              <button
+                type="button"
+                onClick={handleUndoDrawPoint}
+                className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1 cursor-pointer border border-slate-700 transition-colors"
+                title="Desfazer último ponto (Ctrl+Z)"
+              >
+                <Undo2 className="w-3 h-3 text-amber-400" />
+                Desfazer
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCancelDrawingPath}
+              className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 font-bold text-xs flex items-center gap-1 cursor-pointer border border-slate-700 transition-colors"
+              title="Cancelar Traçado (ESC)"
+            >
+              <X className="w-3 h-3" />
+              Sair (ESC)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Mode Helper Notification Banner (Drag from Dot) */}
+      {connectingSourceNode && !isDrawingPathMode && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md border border-orange-500/80 shadow-2xl rounded-2xl px-4 py-2 flex items-center gap-3 text-white text-xs select-none pointer-events-auto">
           <div className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-ping shrink-0" />
           <span>
@@ -949,7 +1220,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         </div>
       )}
 
-      {/* 3. HTML DOM Layer for Equipment Node Cards (PNG Icon + Item Name + IP + MAC) */}
+      {/* 4. HTML DOM Layer for Equipment Node Cards (PNG Icon + Item Name + IP + MAC) */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -977,9 +1248,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 width: '90px',
               }}
               className={`absolute pointer-events-auto flex flex-col items-center select-none group transition-transform duration-100 ${
-                isConnectTarget ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
+                isDrawingPathMode ? 'cursor-crosshair' : isConnectTarget ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
               }`}
-              title={`Duplo clique para abrir ${node.name} (ou clique e arraste para mover)`}
+              title={isDrawingPathMode ? `Clique para adicionar ${node.name} ao traçado` : `Duplo clique para abrir ${node.name} (ou clique e arraste para mover)`}
             >
               {/* Icon / PNG Container */}
               <div className="relative">
@@ -1023,23 +1294,25 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   title={`Status: ${node.status}`}
                 />
 
-                {/* Right Port Connector Dot (Bolinha com centro branco exatamente como na imagem de referência) */}
-                <div
-                  onMouseDown={(e) => handleStartCableDrag(e, node.id)}
-                  onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
-                  className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
-                    isConnectSource
-                      ? 'ring-4 ring-yellow-400 scale-125 animate-pulse bg-orange-500'
-                      : isTargetHovered
-                      ? 'ring-4 ring-emerald-400 scale-135 bg-emerald-500'
-                      : connectingSourceId
-                      ? 'ring-2 ring-emerald-400/80 scale-110 opacity-100'
-                      : 'hover:scale-125 hover:ring-2 hover:ring-yellow-400/80'
-                  }`}
-                  title="Clique e arraste para ligar cabo a outro equipamento"
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs pointer-events-none" />
-                </div>
+                {/* Right Port Connector Dot */}
+                {!isDrawingPathMode && (
+                  <div
+                    onMouseDown={(e) => handleStartCableDrag(e, node.id)}
+                    onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
+                    className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-slate-950 bg-orange-500 flex items-center justify-center cursor-crosshair transition-all z-30 shadow-md ${
+                      isConnectSource
+                        ? 'ring-4 ring-yellow-400 scale-125 animate-pulse bg-orange-500'
+                        : isTargetHovered
+                        ? 'ring-4 ring-emerald-400 scale-135 bg-emerald-500'
+                        : connectingSourceId
+                        ? 'ring-2 ring-emerald-400/80 scale-110 opacity-100'
+                        : 'hover:scale-125 hover:ring-2 hover:ring-yellow-400/80'
+                    }`}
+                    title="Clique e arraste para ligar cabo a outro equipamento"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs pointer-events-none" />
+                  </div>
+                )}
               </div>
 
               {/* Node Name & Subtitle Badge */}

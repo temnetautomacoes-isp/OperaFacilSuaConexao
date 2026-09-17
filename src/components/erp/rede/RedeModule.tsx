@@ -273,9 +273,10 @@ export const RedeModule: React.FC = () => {
     linkType: LinkType = 'fiber_sm',
     customStyle?: LinkStyleConfig,
     startPoint?: { x: number; y: number },
-    endPoint?: { x: number; y: number }
+    endPoint?: { x: number; y: number },
+    points?: Array<{ x: number; y: number }>
   ) => {
-    if (sourceNodeId && targetNodeId) {
+    if (sourceNodeId && targetNodeId && !points?.length) {
       const existing = links.find(
         (l) => (l.sourceNodeId === sourceNodeId && l.targetNodeId === targetNodeId) ||
                (l.sourceNodeId === targetNodeId && l.targetNodeId === sourceNodeId)
@@ -289,6 +290,7 @@ export const RedeModule: React.FC = () => {
       targetNodeId,
       startPoint,
       endPoint,
+      points,
       type: linkType,
       speed: linkType === 'fiber_sm' ? '10 Gbps' : linkType === 'utp_cat6' ? '1 Gbps' : '1 Gbps FTTH',
       status: 'active',
