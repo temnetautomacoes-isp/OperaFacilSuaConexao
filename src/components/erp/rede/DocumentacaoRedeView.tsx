@@ -40,6 +40,7 @@ import { NetworkCanvas } from './NetworkCanvas';
 import { DeviceInspector } from './DeviceInspector';
 import { NewAssetModal } from './NewAssetModal';
 import { RackElevationModal } from './RackElevationModal';
+import { NewRackModal } from './NewRackModal';
 import { DEVICE_CATALOG } from './initialNetworkData';
 
 interface DocumentacaoRedeViewProps {
@@ -136,9 +137,39 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
+  const [isNewRackModalOpen, setIsNewRackModalOpen] = useState(false);
   const [rackElevationModalNode, setRackElevationModalNode] = useState<NetworkNode | null>(null);
   const [targetRackForNewAsset, setTargetRackForNewAsset] = useState<{ rack: NetworkNode; slotU?: number } | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const handleAddNewRack = (rackData: Partial<NetworkNode>) => {
+    const spawnX = Math.round((-panOffset.x + 320) / zoom);
+    const spawnY = Math.round((-panOffset.y + 180) / zoom);
+    const units = rackData.rackUnits || rackData.totalRackCapacityU || 44;
+    const newRackNode: NetworkNode = {
+      id: `rack-${Date.now()}`,
+      name: rackData.name || 'RAQUE DE CHAO',
+      hostname: rackData.hostname || `RACK-${Math.floor(1000 + Math.random() * 9000)}.local`,
+      type: rackData.type || 'rack_floor',
+      category: 'rack_power',
+      x: spawnX,
+      y: spawnY,
+      rackUnits: units,
+      totalRackCapacityU: units,
+      folderId: rackData.folderId || selectedFolderId || folders[0]?.id || undefined,
+      location: rackData.location || (selectedFolderId ? folders.find(f => f.id === selectedFolderId)?.name || 'POP Central' : 'POP Central'),
+      vendor: rackData.vendor || 'Padrão Telecom 19"',
+      model: rackData.model || 'Gabinete 19"',
+      status: 'online',
+      powerSupply: rackData.powerSupply || '220V AC',
+      notes: rackData.notes || '',
+      customImageUrl: rackData.customImageUrl,
+      imageUrl: rackData.imageUrl,
+    };
+    onAddDevice(newRackNode);
+    setIsNewRackModalOpen(false);
+    setRackElevationModalNode(newRackNode);
+  };
 
   const handleOpenAddAssetToRack = (rackNode: NetworkNode, slotU?: number) => {
     setTargetRackForNewAsset({ rack: rackNode, slotU });
@@ -321,6 +352,17 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
               </button>
             </div>
           )}
+
+          {/* Botão Adicionar Raque */}
+          <button
+            type="button"
+            onClick={() => setIsNewRackModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer border border-slate-700 hover:border-amber-500/60 group"
+            title="Adicionar novo Raque (Definir quantidade de Us e configurações)"
+          >
+            <Server className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>Adicionar Raque</span>
+          </button>
 
           <button
             type="button"
@@ -891,6 +933,15 @@ export const DocumentacaoRedeView: React.FC<DocumentacaoRedeViewProps> = ({
           setIsAddDeviceModalOpen(false);
           setTargetRackForNewAsset(null);
         }}
+      />
+
+      {/* New Rack (Raque) Modal */}
+      <NewRackModal
+        isOpen={isNewRackModalOpen}
+        folders={folders}
+        defaultFolderId={selectedFolderId}
+        onClose={() => setIsNewRackModalOpen(false)}
+        onAddRack={handleAddNewRack}
       />
 
       {/* Rack 19" Elevation & Stacking Modal */}
