@@ -27,7 +27,6 @@ import {
   RotateCcw,
   Trash2,
   Edit3,
-  Pencil,
   Check,
   Undo2,
   X
@@ -266,6 +265,15 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   };
 
+  // Mouse move on canvas container - Always track precise mousePos in world space
+  const handleContainerMouseMove = (e: React.MouseEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const curX = (e.clientX - rect.left - panOffset.x) / zoom;
+    const curY = (e.clientY - rect.top - panOffset.y) / zoom;
+    setMousePos({ x: Math.round(curX), y: Math.round(curY) });
+  };
+
   // Global window listeners for drag, pan & keyboard shortcuts
   useEffect(() => {
     const onWindowMouseMove = (e: MouseEvent) => {
@@ -277,7 +285,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       setMousePos({ x: Math.round(curX), y: Math.round(curY) });
 
       if (connectingSourceId) {
-        // Generous target node detection (radial and bounding box)
+        // Target node detection (radial and bounding box)
         const hovered = visibleNodes.find(n => {
           if (n.id === connectingSourceId) return false;
           const withinBox = curX >= n.x - 25 && curX <= n.x + 115 && curY >= n.y - 25 && curY <= n.y + 125;
@@ -420,6 +428,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     if (isDrawingPathMode) {
       if (e.button === 0) {
         setDrawingPathPoints(prev => [...prev, { x: clickX, y: clickY }]);
+        setMousePos({ x: clickX, y: clickY });
         return;
       }
     }
@@ -472,6 +481,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         setDrawingTargetNodeId(nodeId);
       }
       setDrawingPathPoints(prev => [...prev, { x: snapX, y: snapY }]);
+      setMousePos({ x: snapX, y: snapY });
       return;
     }
 
@@ -689,6 +699,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     <div
       ref={containerRef}
       onMouseDown={handleCanvasMouseDown}
+      onMouseMove={handleContainerMouseMove}
       onDoubleClick={handleCanvasDoubleClick}
       className={`flex-1 h-full min-h-0 relative overflow-hidden bg-[#0a101d] ${
         isDrawingPathMode ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-default'
@@ -867,7 +878,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           })}
         </defs>
 
-        {/* Cable Links with Customizable Visual Mindmap Styles & Polyline Paths */}
+        {/* Saved Cable Links with Customizable Visual Mindmap Styles & Polyline Paths */}
         {visibleLinks.map((link) => {
           const isSelected = selectedLinkId === link.id;
           const stroke = getLinkStroke(link);
@@ -912,7 +923,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 d={pathD}
                 fill="none"
                 stroke="transparent"
-                strokeWidth={24}
+                strokeWidth={26}
               />
 
               {/* Selection / Hover Glow */}
@@ -932,7 +943,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 d={pathD}
                 fill="none"
                 stroke="#020617"
-                strokeWidth={stroke.width + 2}
+                strokeWidth={stroke.width + 2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -955,10 +966,10 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               <circle
                 cx={startPt.x}
                 cy={startPt.y}
-                r={3.5}
+                r={4}
                 fill={stroke.color}
                 stroke="#ffffff"
-                strokeWidth={1}
+                strokeWidth={1.5}
               />
 
               {/* Render waypoints circles when link is selected */}
@@ -967,7 +978,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                   key={pIdx}
                   cx={pt.x}
                   cy={pt.y}
-                  r={4}
+                  r={4.5}
                   fill="#facc15"
                   stroke="#020617"
                   strokeWidth={1.5}
@@ -1046,7 +1057,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
               return (
                 <g>
-                  {/* Subtle dark backdrop for high visibility on any dark canvas background */}
+                  {/* Dark backdrop */}
                   <path
                     d={dragPathD}
                     fill="none"
@@ -1086,60 +1097,84 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
         {isDrawingPathMode && drawingPathPoints.length > 0 && (
           <g className="pointer-events-none">
             {(() => {
-              const allPoints = [...drawingPathPoints, mousePos];
               const lineColor = activeLineConfig?.strokeColor || '#facc15';
               const cleanColorId = lineColor.replace(/[^a-zA-Z0-9]/g, '');
               const strokeDash = activeLineConfig?.strokeDash === 'dashed' ? '6,5' : activeLineConfig?.strokeDash === 'dotted' ? '2,4' : undefined;
               const strokeWidth = activeLineConfig?.strokeWidth || 3;
               const lineStyle = activeLineConfig?.lineStyle || 'straight';
 
-              const livePathD = generateSvgPathFromPoints(allPoints, lineStyle);
+              // 1. Fixed Path of all clicked vertices so far
+              const fixedPathD = drawingPathPoints.length >= 2 
+                ? generateSvgPathFromPoints(drawingPathPoints, lineStyle) 
+                : '';
+
+              // 2. Rubberband dynamic line connecting last clicked point to current moving cursor
+              const lastPt = drawingPathPoints[drawingPathPoints.length - 1];
+              const rubberbandPoints = [lastPt, mousePos];
+              const rubberbandPathD = generateSvgPathFromPoints(rubberbandPoints, lineStyle);
 
               return (
                 <g>
-                  {/* Dark Outline */}
+                  {/* Fixed Clicked Path (Guaranteed visible once 2+ points are clicked) */}
+                  {fixedPathD && (
+                    <>
+                      <path
+                        d={fixedPathD}
+                        fill="none"
+                        stroke="#020617"
+                        strokeWidth={strokeWidth + 4}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d={fixedPathD}
+                        fill="none"
+                        stroke={lineColor}
+                        strokeWidth={strokeWidth + 0.5}
+                        strokeDasharray={strokeDash}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </>
+                  )}
+
+                  {/* Dynamic Rubberband to moving cursor */}
                   <path
-                    d={livePathD}
+                    d={rubberbandPathD}
                     fill="none"
                     stroke="#020617"
                     strokeWidth={strokeWidth + 3}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-
-                  {/* Active Live Polyline */}
                   <path
-                    d={livePathD}
+                    d={rubberbandPathD}
                     fill="none"
                     stroke={lineColor}
                     strokeWidth={strokeWidth}
-                    strokeDasharray={strokeDash}
+                    strokeDasharray="4,4"
+                    opacity={0.85}
                     markerEnd={activeLineConfig?.arrowType !== 'none' ? `url(#arrow-end-${cleanColorId})` : undefined}
-                    markerStart={activeLineConfig?.arrowType === 'both' ? `url(#arrow-start-${cleanColorId})` : undefined}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
 
-                  {/* Clicked Vertices Dots with Order Numbers */}
+                  {/* Clicked Vertices Dots with High-Contrast Number Badges */}
                   {drawingPathPoints.map((pt, idx) => (
                     <g key={idx} transform={`translate(${pt.x}, ${pt.y})`}>
-                      <circle r={6.5} fill="#f97316" stroke="#ffffff" strokeWidth={2} />
-                      <text x={0} y={3} fill="#ffffff" fontSize={8} fontWeight="900" textAnchor="middle">
+                      <circle r={10} fill="#020617" opacity={0.7} />
+                      <circle r={8} fill="#f97316" stroke="#ffffff" strokeWidth={2} />
+                      <text x={0} y={3} fill="#ffffff" fontSize={9} fontWeight="900" textAnchor="middle">
                         {idx + 1}
                       </text>
                     </g>
                   ))}
 
-                  {/* Current Moving Cursor Dot */}
-                  <circle
-                    cx={mousePos.x}
-                    cy={mousePos.y}
-                    r={5}
-                    fill={lineColor}
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
-                    className="animate-ping"
-                  />
+                  {/* Current Moving Cursor Target Dot */}
+                  <g transform={`translate(${mousePos.x}, ${mousePos.y})`}>
+                    <circle r={6} fill={lineColor} stroke="#ffffff" strokeWidth={2} />
+                    <circle r={12} fill="none" stroke={lineColor} strokeWidth={1.5} opacity={0.7} className="animate-ping" />
+                  </g>
                 </g>
               );
             })()}
