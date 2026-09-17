@@ -685,78 +685,116 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
           );
         })}
 
-        {/* Temporary connecting line when dragging a new cable (Live Smooth Mindmap Bezier) */}
+        {/* Temporary connecting line when dragging a new cable (Live Smooth Animated Dashed S-Curve) */}
         {connectingSourceNode && (
-          <g>
+          <g className="pointer-events-none">
             {(() => {
               const startX = draggedCableStartPos?.x || (connectingSourceNode.x + 45);
               const startY = draggedCableStartPos?.y || (connectingSourceNode.y + 28);
-              const side = draggedCableStartPos?.side || 'right';
 
               let endX = mousePos.x;
               let endY = mousePos.y;
-              let targetDir = 'left';
 
               if (hoveredTargetNode) {
                 const port = getPortCoordinates(hoveredTargetNode, startX, startY);
                 endX = port.x;
                 endY = port.y;
-                targetDir = port.dir;
               }
 
-              const livePath = calculateMindmapPath(
-                startX,
-                startY,
-                side,
-                endX,
-                endY,
-                targetDir
-              );
+              // Smooth S-Curve cubic Bezier directly between start and end
+              const dx = endX - startX;
+              const dy = endY - startY;
+              const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+              const curvature = Math.max(30, (isHorizontal ? Math.abs(dx) : Math.abs(dy)) * 0.5);
+
+              const livePath = isHorizontal
+                ? `M ${startX} ${startY} C ${startX + (dx >= 0 ? curvature : -curvature)} ${startY}, ${endX - (dx >= 0 ? curvature : -curvature)} ${endY}, ${endX} ${endY}`
+                : `M ${startX} ${startY} C ${startX} ${startY + (dy >= 0 ? curvature : -curvature)}, ${endX} ${endY - (dy >= 0 ? curvature : -curvature)}, ${endX} ${endY}`;
+
+              const isConnectedTarget = Boolean(hoveredTargetNode);
+              const lineColor = isConnectedTarget ? '#10b981' : '#f97316';
+
+              const midX = (startX + endX) / 2;
+              const midY = (startY + endY) / 2;
 
               return (
-                <>
-                  {/* Glowing Preview Curve */}
+                <g>
+                  {/* Outer glowing halo */}
                   <path
                     d={livePath}
                     fill="none"
-                    stroke={hoveredTargetNode ? '#10b981' : '#f97316'}
-                    strokeWidth={hoveredTargetNode ? 4.5 : 3.5}
-                    strokeDasharray={hoveredTargetNode ? 'none' : '6,5'}
+                    stroke={lineColor}
+                    strokeWidth={10}
+                    opacity={0.35}
                     strokeLinecap="round"
-                    markerEnd={hoveredTargetNode ? 'url(#arrow-hover)' : 'url(#arrow-default)'}
-                    filter="url(#glow)"
-                    className="animate-pulse"
+                  />
+
+                  {/* Dark backing line */}
+                  <path
+                    d={livePath}
+                    fill="none"
+                    stroke="#020617"
+                    strokeWidth={6}
+                    strokeLinecap="round"
+                  />
+
+                  {/* Main animated dashed connecting line */}
+                  <path
+                    d={livePath}
+                    fill="none"
+                    stroke={lineColor}
+                    strokeWidth={3.5}
+                    strokeDasharray="8,6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
 
                   {/* Start Point Dot */}
                   <circle
                     cx={startX}
                     cy={startY}
-                    r={5}
+                    r={6}
                     fill="#f97316"
                     stroke="#ffffff"
                     strokeWidth={2}
                   />
 
-                  {/* Target Cursor Pulse Dot */}
+                  {/* Target Point Dot with Pulse */}
                   <circle
                     cx={endX}
                     cy={endY}
-                    r={hoveredTargetNode ? 8 : 6}
-                    fill={hoveredTargetNode ? '#10b981' : '#f97316'}
+                    r={isConnectedTarget ? 10 : 7}
+                    fill={lineColor}
                     stroke="#ffffff"
-                    strokeWidth={2}
-                    className="animate-ping"
+                    strokeWidth={2.5}
                   />
-                  <circle
-                    cx={endX}
-                    cy={endY}
-                    r={hoveredTargetNode ? 7 : 5}
-                    fill={hoveredTargetNode ? '#10b981' : '#f97316'}
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                  />
-                </>
+
+                  {/* Floating tooltip badge in the middle of live dragging line */}
+                  <g transform={`translate(${midX}, ${midY})`}>
+                    <rect
+                      x={-55}
+                      y={-12}
+                      width={110}
+                      height={24}
+                      rx={12}
+                      fill="#0f172a"
+                      stroke={lineColor}
+                      strokeWidth={1.5}
+                      opacity={0.95}
+                    />
+                    <text
+                      x={0}
+                      y={4}
+                      fill="#f8fafc"
+                      fontSize={10}
+                      fontWeight="bold"
+                      fontFamily="sans-serif"
+                      textAnchor="middle"
+                    >
+                      {isConnectedTarget ? '✓ Solte para Ligar' : `Ligar ${(selectedCableType || 'cabo').toUpperCase()}`}
+                    </text>
+                  </g>
+                </g>
               );
             })()}
           </g>
