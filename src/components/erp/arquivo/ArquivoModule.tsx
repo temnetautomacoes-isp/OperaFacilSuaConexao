@@ -360,6 +360,16 @@ export const ArquivoModule: React.FC = () => {
     return <File className={`${size} text-slate-400`} />;
   };
 
+  // Toast Notification State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
+
   // Helper for generating UUID
   const getUUID = () => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -379,25 +389,29 @@ export const ArquivoModule: React.FC = () => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
 
-    try {
-      const newFolder: ExplorerFolder = {
-        id: getUUID(),
-        name: newFolderName.trim(),
-        parentId: currentFolderId || null,
-        color: newFolderColor || '#f59e0b',
-        icon: 'folder',
-        createdBy: currentUser?.name || currentUser?.username || 'Usuário',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    const folderId = getUUID();
+    const newFolder: ExplorerFolder = {
+      id: folderId,
+      name: newFolderName.trim(),
+      parentId: currentFolderId || null,
+      color: newFolderColor || '#f59e0b',
+      icon: 'folder',
+      createdBy: currentUser?.name || currentUser?.username || 'Usuário',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
+    // Optimistic UI update
+    setFolders((prev) => [...prev, newFolder]);
+    setNewFolderName('');
+    setIsNewFolderOpen(false);
+
+    try {
       await supabaseService.saveExplorerFolder(newFolder);
-      setFolders((prev) => [...prev, newFolder]);
-      setNewFolderName('');
-      setIsNewFolderOpen(false);
+      showToast(`Pasta "${newFolder.name}" criada com sucesso!`, 'success');
     } catch (err: any) {
-      console.error('Erro ao criar pasta:', err);
-      alert('Erro ao criar pasta no Supabase: ' + (err?.message || err?.error_description || 'Falha na conexão'));
+      console.error('Erro ao salvar pasta no Supabase:', err);
+      showToast('Erro ao sincronizar pasta com a nuvem Supabase: ' + (err?.message || 'Falha de conexão'), 'error');
     }
   };
 
@@ -413,21 +427,23 @@ export const ArquivoModule: React.FC = () => {
     e.preventDefault();
     if (!editFolderTarget || !editFolderName.trim()) return;
 
-    try {
-      const updated: ExplorerFolder = {
-        ...editFolderTarget,
-        name: editFolderName.trim(),
-        color: editFolderColor,
-        updatedAt: new Date().toISOString(),
-      };
+    const updated: ExplorerFolder = {
+      ...editFolderTarget,
+      name: editFolderName.trim(),
+      color: editFolderColor,
+      updatedAt: new Date().toISOString(),
+    };
 
+    setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+    setIsEditFolderOpen(false);
+    setEditFolderTarget(null);
+
+    try {
       await supabaseService.saveExplorerFolder(updated);
-      setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
-      setIsEditFolderOpen(false);
-      setEditFolderTarget(null);
+      showToast('Pasta atualizada com sucesso!', 'success');
     } catch (err: any) {
       console.error('Erro ao editar pasta:', err);
-      alert('Erro ao salvar alterações da pasta: ' + (err?.message || 'Falha na conexão'));
+      showToast('Erro ao atualizar pasta: ' + (err?.message || 'Falha de conexão'), 'error');
     }
   };
 
@@ -1890,6 +1906,33 @@ export const ArquivoModule: React.FC = () => {
                 Sim, Excluir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 duration-200">
+          <div
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold ${
+              toast.type === 'success'
+                ? 'bg-emerald-900/90 text-white border-emerald-500 backdrop-blur-md'
+                : 'bg-rose-900/90 text-white border-rose-500 backdrop-blur-md'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            )}
+            <span>{toast.message}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="ml-2 text-white/70 hover:text-white p-0.5 rounded-lg"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
