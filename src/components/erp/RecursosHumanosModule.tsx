@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   UserAccount, 
@@ -113,6 +113,8 @@ const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
+const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
 export const RecursosHumanosModule: React.FC = () => {
   const { 
     users, 
@@ -183,6 +185,24 @@ export const RecursosHumanosModule: React.FC = () => {
 
   const [isPrintMirrorModalOpen, setIsPrintMirrorModalOpen] = useState<boolean>(false);
   const [printUserId, setPrintUserId] = useState<string>('');
+
+  // Dossier Ponto Filters (Individual RH Dossier)
+  const [dossierPontoMonth, setDossierPontoMonth] = useState<number>(new Date().getMonth());
+  const [dossierPontoYear, setDossierPontoYear] = useState<number>(new Date().getFullYear());
+
+  // Print Mirror Day Selection States
+  const [selectedDaysForPrint, setSelectedDaysForPrint] = useState<number[]>([]);
+  const [selectAllDaysForPrint, setSelectAllDaysForPrint] = useState<boolean>(true);
+
+  // Synchronize days for print when modal opens or month/year changes
+  useEffect(() => {
+    if (isPrintMirrorModalOpen) {
+      const daysCount = new Date(pontoYear, pontoMonth + 1, 0).getDate();
+      const allDays = Array.from({ length: daysCount }, (_, i) => i + 1);
+      setSelectedDaysForPrint(allDays);
+      setSelectAllDaysForPrint(true);
+    }
+  }, [isPrintMirrorModalOpen, pontoMonth, pontoYear]);
 
   // Detailed Day Record Pop-up Modal State
   const [selectedTimeRecordForDetail, setSelectedTimeRecordForDetail] = useState<TimeClockRecord | null>(null);
@@ -2463,7 +2483,26 @@ export const RecursosHumanosModule: React.FC = () => {
 
               {/* Sub-section: Histórico de Batidas de Ponto com Auditoria Individual */}
               {(() => {
-                const userPontoRecords = timeRecords.filter((r) => isRecordForUser(r, selectedUserForDossier.id)).sort((a, b) => b.date.localeCompare(a.date));
+                const userPontoRecords = timeRecords.filter((r) => 
+                  !r.isDeleted &&
+                  isRecordForUser(r, selectedUserForDossier.id) &&
+                  isRecordInMonthYear(r, dossierPontoMonth, dossierPontoYear)
+                ).sort((a, b) => b.date.localeCompare(a.date));
+
+                let dossierTotalHours = 0;
+                let dossierTotalExtra = 0;
+                let dossierDaysWorked = 0;
+
+                userPontoRecords.forEach((r) => {
+                  if (r.entry1 || r.exit1 || r.entry2 || r.exit2 || r.totalHours) {
+                    dossierDaysWorked += 1;
+                  }
+                  dossierTotalHours += r.totalHours || 0;
+                  dossierTotalExtra += r.extraHours || 0;
+                });
+                dossierTotalHours = Number(dossierTotalHours.toFixed(2));
+                dossierTotalExtra = Number(dossierTotalExtra.toFixed(2));
+
                 const allUserAdjustments: Array<{ recordDate: string; log: TimeClockAdjustmentLog }> = [];
 
                 userPontoRecords.forEach((r) => {
@@ -2476,7 +2515,7 @@ export const RecursosHumanosModule: React.FC = () => {
 
                 return (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                           <Clock className="w-4 h-4 text-emerald-600" />
@@ -2487,18 +2526,81 @@ export const RecursosHumanosModule: React.FC = () => {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Filtro Mês e Ano */}
+                        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1.5 shadow-2xs">
+                          <div className="flex items-center gap-1 pl-1 text-[11px] font-bold text-slate-600">
+                            <Filter className="w-3.5 h-3.5 text-orange-500" />
+                            <span>Período:</span>
+                          </div>
+                          <select
+                            value={dossierPontoMonth}
+                            onChange={(e) => setDossierPontoMonth(Number(e.target.value))}
+                            className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500 cursor-pointer shadow-2xs"
+                          >
+                            {MONTH_NAMES.map((m, idx) => (
+                              <option key={m} value={idx}>{m}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={dossierPontoYear}
+                            onChange={(e) => setDossierPontoYear(Number(e.target.value))}
+                            className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500 cursor-pointer shadow-2xs"
+                          >
+                            {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => {
+                            setPontoMonth(dossierPontoMonth);
+                            setPontoYear(dossierPontoYear);
                             setPrintUserId(selectedUserForDossier.id);
                             setIsPrintMirrorModalOpen(true);
                           }}
-                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                          className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                         >
                           <Printer className="w-3.5 h-3.5 text-orange-400" />
                           <span>Imprimir Espelho</span>
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Cards de Resumo de Ponto do Colaborador (Image 2) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex items-center gap-3">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+                          <CalendarDays className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Dias Registrados</span>
+                          <div className="text-lg font-black text-slate-900">{dossierDaysWorked} dias</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex items-center gap-3">
+                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Total Horas Trabalhadas</span>
+                          <div className="text-lg font-black text-emerald-700">{dossierTotalHours} hrs</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex items-center gap-3">
+                        <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Saldo Horas Extras / Banco</span>
+                          <div className={`text-lg font-black ${dossierTotalExtra >= 0 ? 'text-orange-600' : 'text-rose-600'}`}>
+                            {dossierTotalExtra > 0 ? `+${dossierTotalExtra}` : dossierTotalExtra} hrs
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -2520,11 +2622,11 @@ export const RecursosHumanosModule: React.FC = () => {
                           {userPontoRecords.length === 0 ? (
                             <tr>
                               <td colSpan={8} className="py-6 text-center text-slate-400">
-                                Nenhuma batida de ponto registrada para este colaborador.
+                                Nenhuma batida de ponto registrada para este colaborador no período selecionado.
                               </td>
                             </tr>
                           ) : (
-                            userPontoRecords.slice(0, 15).map((r) => {
+                            userPontoRecords.map((r) => {
                               const renderDossierSlot = (field: TimeClockPunchType, val?: string) => {
                                 const hasAdj = r.adjustments?.some((a) => a.field === field);
                                 return (
@@ -4171,130 +4273,386 @@ export const RecursosHumanosModule: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* 18. MODAL: IMPRESSÃO DO ESPELHO DE PONTO OFICIAL */}
+      {/* 18. MODAL: IMPRESSÃO DO ESPELHO DE PONTO OFICIAL (PORTARIA 3162/1982) */}
       {/* ========================================================================= */}
       {isPrintMirrorModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[96vh] overflow-hidden flex flex-col shadow-2xl border border-slate-300 my-auto">
             
-            {/* Modal Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between no-print">
-              <div className="flex items-center gap-2.5">
-                <Printer className="w-5 h-5 text-orange-400" />
-                <h3 className="font-extrabold text-base">Espelho de Ponto Eletrônico &bull; Visualização Oficial</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Imprimir / Salvar PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPrintMirrorModalOpen(false)}
-                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Printable Document Body */}
-            <div className="p-8 overflow-y-auto space-y-6 bg-white font-sans text-slate-900 printable-area">
-              
-              {/* Document Header */}
-              <div className="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
-                <div>
-                  <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-                    {settings.name || 'OperaFácil Provedor de Internet'}
-                  </h1>
-                  <p className="text-xs font-bold text-slate-600">
-                    CNPJ: {settings.cnpj || '00.000.000/0001-00'} &bull; {settings.address || 'Sede Central'}
-                  </p>
-                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                    ESPELHO DE PONTO ELETRÔNICO INDIVIDUAL &bull; PORTARIA 671 / MTP
-                  </p>
+            {/* Modal Header & Configuration Toolbar (Non-printable) */}
+            <div className="p-4 bg-slate-900 text-white space-y-3 no-print">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Printer className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <h3 className="font-extrabold text-base">Espelho de Ponto Eletrônico &bull; Visualização Oficial</h3>
+                    <p className="text-[11px] text-slate-400">
+                      Folha de Auditoria Individual &bull; Portaria Ministerial nº 3162/1982
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold bg-slate-100 px-3 py-1 rounded-lg border border-slate-300">
-                    MÊS: {MONTH_NAMES[pontoMonth].toUpperCase()} / {pontoYear}
-                  </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Imprimir / Salvar PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintMirrorModalOpen(false)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* Employee Info Block */}
+              {/* Toolbar: Filtro de Mês/Ano e Seleção de Dias para Impressão */}
               {(() => {
                 const targetEmp = users.find((u) => u.id === printUserId) || users[0];
-                const empRecords = timeRecords.filter((r) => {
-                  return isRecordForUser(r, targetEmp?.id || '') && isRecordInMonthYear(r, pontoMonth, pontoYear);
-                });
-
-                let totalH = 0;
-                empRecords.forEach((r) => { totalH += r.totalHours || 0; });
+                const daysInCurrentMonth = new Date(pontoYear, pontoMonth + 1, 0).getDate();
+                const empMonthRecords = timeRecords.filter((r) => 
+                  !r.isDeleted &&
+                  isRecordForUser(r, targetEmp?.id || '') &&
+                  isRecordInMonthYear(r, pontoMonth, pontoYear)
+                );
+                const daysWithRecords = new Set(
+                  empMonthRecords.map((r) => Number(r.date.split('-')[2]))
+                );
 
                 return (
-                  <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Colaborador:</span>
-                        <span className="font-extrabold text-slate-900">{targetEmp?.name}</span>
+                  <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 space-y-3 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-2.5">
+                      {/* Seleção do Mês e Ano do Espelho */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Referência:</span>
+                        <select
+                          value={pontoMonth}
+                          onChange={(e) => {
+                            const newM = Number(e.target.value);
+                            setPontoMonth(newM);
+                            const count = new Date(pontoYear, newM + 1, 0).getDate();
+                            setSelectedDaysForPrint(Array.from({ length: count }, (_, i) => i + 1));
+                            setSelectAllDaysForPrint(true);
+                          }}
+                          className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                        >
+                          {MONTH_NAMES.map((m, idx) => (
+                            <option key={m} value={idx}>{m}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={pontoYear}
+                          onChange={(e) => {
+                            const newY = Number(e.target.value);
+                            setPontoYear(newY);
+                            const count = new Date(newY, pontoMonth + 1, 0).getDate();
+                            setSelectedDaysForPrint(Array.from({ length: count }, (_, i) => i + 1));
+                            setSelectAllDaysForPrint(true);
+                          }}
+                          className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                        >
+                          {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Matrícula / Código:</span>
-                        <span className="font-mono font-bold text-slate-800">{targetEmp?.registrationCode || 'COL-001'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Cargo / Função:</span>
-                        <span className="font-bold text-slate-800">{targetEmp?.position || 'Colaborador'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Departamento:</span>
-                        <span className="font-bold text-slate-800">{targetEmp?.department || 'Operações'}</span>
+
+                      {/* Botões de Ação Rápida dos Dias */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectAllDaysForPrint(true);
+                            setSelectedDaysForPrint(Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Selecionar Todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const punchDays = Array.from(daysWithRecords);
+                            setSelectedDaysForPrint(punchDays);
+                            setSelectAllDaysForPrint(punchDays.length === daysInCurrentMonth);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 text-[11px] font-semibold border border-orange-500/40 cursor-pointer"
+                        >
+                          Apenas com Batidas ({daysWithRecords.size})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectAllDaysForPrint(false);
+                            setSelectedDaysForPrint([]);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Limpar
+                        </button>
                       </div>
                     </div>
 
-                    {/* Table of Punches */}
-                    <div className="border border-slate-300 rounded-xl overflow-hidden">
-                      <table className="w-full text-left text-xs border-collapse">
+                    {/* Master Checkbox e Informação */}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none font-bold text-slate-200 hover:text-white">
+                        <input
+                          type="checkbox"
+                          checked={selectAllDaysForPrint}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectAllDaysForPrint(checked);
+                            if (checked) {
+                              setSelectedDaysForPrint(Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1));
+                            } else {
+                              setSelectedDaysForPrint([]);
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 border-slate-600 bg-slate-700 cursor-pointer"
+                        />
+                        <span>Selecionar Todos os Dias ({daysInCurrentMonth} dias)</span>
+                      </label>
+                      <span className="text-[11px] text-slate-400">
+                        {selectedDaysForPrint.length} de {daysInCurrentMonth} dias marcados para sair na folha
+                      </span>
+                    </div>
+
+                    {/* Grid de Checkboxes individuais por Dia do Mês */}
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-900/70 rounded-xl border border-slate-700/60">
+                      {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((day) => {
+                        const isChecked = selectedDaysForPrint.includes(day);
+                        const hasPunch = daysWithRecords.has(day);
+                        const dateObj = new Date(pontoYear, pontoMonth, day);
+                        const weekDayName = WEEKDAYS_PT[dateObj.getDay()];
+
+                        return (
+                          <label
+                            key={day}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-mono flex items-center gap-1.5 cursor-pointer select-none transition-all ${
+                              isChecked
+                                ? 'bg-orange-500/20 border-orange-500/60 text-orange-200 font-bold'
+                                : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:bg-slate-800'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                let updated: number[];
+                                if (e.target.checked) {
+                                  updated = [...selectedDaysForPrint, day].sort((a, b) => a - b);
+                                } else {
+                                  updated = selectedDaysForPrint.filter((d) => d !== day);
+                                }
+                                setSelectedDaysForPrint(updated);
+                                setSelectAllDaysForPrint(updated.length === daysInCurrentMonth);
+                              }}
+                              className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-500 border-slate-600 bg-slate-700 cursor-pointer"
+                            />
+                            <span>{String(day).padStart(2, '0')} {weekDayName}</span>
+                            {hasPunch && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-xs" title="Dia com batida registrada" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Printable Document Body matching Image 3 (CLT Portaria 3162/1982) */}
+            <div className="p-6 sm:p-8 overflow-y-auto bg-white font-sans text-black printable-area space-y-3">
+              {(() => {
+                const targetEmp = users.find((u) => u.id === printUserId) || users[0];
+                const empRecords = timeRecords.filter((r) => {
+                  return !r.isDeleted && isRecordForUser(r, targetEmp?.id || '') && isRecordInMonthYear(r, pontoMonth, pontoYear);
+                });
+
+                const daysInMonth = new Date(pontoYear, pontoMonth + 1, 0).getDate();
+                
+                // Days to render based on user checkbox selection
+                const daysToRender = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => 
+                  selectedDaysForPrint.includes(d)
+                );
+
+                // Summary calculations for selected days
+                const printedRecords = empRecords.filter((r) => {
+                  const d = Number(r.date.split('-')[2]);
+                  return selectedDaysForPrint.includes(d);
+                });
+
+                let computedTotalHours = 0;
+                let computedTotalExtra = 0;
+                let computedDaysWorked = 0;
+
+                printedRecords.forEach((r) => {
+                  if (r.entry1 || r.exit1 || r.entry2 || r.exit2 || r.totalHours) {
+                    computedDaysWorked += 1;
+                  }
+                  computedTotalHours += r.totalHours || 0;
+                  computedTotalExtra += r.extraHours || 0;
+                });
+                computedTotalHours = Number(computedTotalHours.toFixed(2));
+                computedTotalExtra = Number(computedTotalExtra.toFixed(2));
+
+                const periodFormatted = `${String(pontoMonth + 1).padStart(2, '0')}/${pontoYear}`;
+
+                return (
+                  <>
+                    {/* Header Title (Image 3) */}
+                    <div className="flex items-center justify-between border-b border-black pb-1 mb-1">
+                      <h1 className="text-base font-black tracking-wider uppercase text-black">
+                        FOLHA INDIVIDUAL DE PONTO
+                      </h1>
+                      <span className="text-xs font-bold text-black font-mono">
+                        Período: {periodFormatted}
+                      </span>
+                    </div>
+
+                    {/* Company & Employee Information Box matching Image 3 */}
+                    <div className="border border-black text-[11px] text-black divide-y divide-black">
+                      {/* Row 1 */}
+                      <div className="grid grid-cols-12 divide-x divide-black">
+                        <div className="col-span-7 px-2 py-0.5">
+                          <span className="font-bold">Empresa: </span>
+                          <span className="font-semibold uppercase">{settings.name || 'SUA CONEXÃO COMPLETA LTDA'}</span>
+                        </div>
+                        <div className="col-span-5 px-2 py-0.5">
+                          <span className="font-bold">CNPJ: </span>
+                          <span className="font-mono">{settings.cnpj || '58.232.657/0001-64'}</span>
+                        </div>
+                      </div>
+
+                      {/* Row 2 */}
+                      <div className="grid grid-cols-12 divide-x divide-black">
+                        <div className="col-span-7 px-2 py-0.5">
+                          <span className="font-bold">Endereço: </span>
+                          <span className="font-semibold uppercase">{settings.address || 'RUA RENATO BITTENCOURT, 169'}</span>
+                        </div>
+                        <div className="col-span-5 px-2 py-0.5">
+                          <span className="font-bold">Bairro: </span>
+                          <span className="uppercase">TERESÓPOLIS</span>
+                        </div>
+                      </div>
+
+                      {/* Row 3 */}
+                      <div className="grid grid-cols-12 divide-x divide-black">
+                        <div className="col-span-7 px-2 py-0.5">
+                          <span className="font-bold">Cidade: </span>
+                          <span className="uppercase">ALAGOINHAS</span>
+                        </div>
+                        <div className="col-span-5 px-2 py-0.5 flex items-center justify-between">
+                          <div>
+                            <span className="font-bold">UF: </span>
+                            <span>BA</span>
+                          </div>
+                          <div>
+                            <span className="font-bold">CEP: </span>
+                            <span className="font-mono">48018-030</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Row 4 */}
+                      <div className="grid grid-cols-12 divide-x divide-black">
+                        <div className="col-span-7 px-2 py-0.5">
+                          <span className="font-bold">Nome: </span>
+                          <span className="font-bold uppercase">
+                            {targetEmp?.registrationCode || targetEmp?.operatorNumber || '1'} - {targetEmp?.name}
+                          </span>
+                        </div>
+                        <div className="col-span-5 px-2 py-0.5">
+                          <span className="font-bold">Horário: </span>
+                          <span className="font-mono">{targetEmp?.workSchedule || '08:00 - 12:00 / 14:00 - 18:00'}</span>
+                        </div>
+                      </div>
+
+                      {/* Row 5 */}
+                      <div className="grid grid-cols-12 divide-x divide-black">
+                        <div className="col-span-7 px-2 py-0.5">
+                          <span className="font-bold">Função: </span>
+                          <span className="uppercase font-semibold">{targetEmp?.position || 'AUX DE TI'}</span>
+                        </div>
+                        <div className="col-span-5 px-2 py-0.5">
+                          <span className="font-bold">Departamento: </span>
+                          <span className="uppercase font-semibold">{targetEmp?.department || 'DEPARTAMENTO DE SERVIÇOS'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table of Punches matching Image 3 structure */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-center text-[10px] border-collapse border border-black">
                         <thead>
-                          <tr className="bg-slate-100 border-b border-slate-300 text-[10px] font-black uppercase text-slate-700">
-                            <th className="py-2 px-3 border-r border-slate-200">Data</th>
-                            <th className="py-2 px-3 border-r border-slate-200">Dia</th>
-                            <th className="py-2 px-3 border-r border-slate-200 text-center">Entrada 1</th>
-                            <th className="py-2 px-3 border-r border-slate-200 text-center">Saída 1</th>
-                            <th className="py-2 px-3 border-r border-slate-200 text-center">Entrada 2</th>
-                            <th className="py-2 px-3 border-r border-slate-200 text-center">Saída 2</th>
-                            <th className="py-2 px-3 border-r border-slate-200 text-center">Total Horas</th>
-                            <th className="py-2 px-3 text-center">Ocorrência / Obs</th>
+                          <tr className="bg-slate-100 text-black">
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-7 font-bold">Dia</th>
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-9 font-bold">Sem</th>
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-12 font-bold">Entrada</th>
+                            <th colSpan={2} className="border border-black px-1 py-1 font-bold">Intervalo</th>
+                            <th rowSpan={2} className="border border-black px-1 py-1 w-12 font-bold">Saída</th>
+                            <th colSpan={3} className="border border-black px-1 py-1 font-bold">Hora Extra</th>
+                            <th rowSpan={2} className="border border-black px-2 py-1 font-bold min-w-[140px]">Assinatura</th>
+                          </tr>
+                          <tr className="bg-slate-100 text-black">
+                            <th className="border border-black px-1 py-0.5 w-12 font-bold">Saída</th>
+                            <th className="border border-black px-1 py-0.5 w-12 font-bold">Entrada</th>
+                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Entrada</th>
+                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Saída</th>
+                            <th className="border border-black px-1 py-0.5 w-11 font-bold">Nº Horas</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-200 text-[11px]">
-                          {empRecords.length === 0 ? (
+                        <tbody>
+                          {daysToRender.length === 0 ? (
                             <tr>
-                              <td colSpan={8} className="py-8 text-center text-slate-400">
-                                Nenhum registro de ponto lançado para este colaborador no período.
+                              <td colSpan={10} className="border border-black py-4 text-center text-slate-500">
+                                Nenhum dia selecionado para impressão.
                               </td>
                             </tr>
                           ) : (
-                            empRecords.map((r) => {
-                              const d = new Date(r.date + 'T00:00:00');
-                              const hasAdj = r.adjustments && r.adjustments.length > 0;
+                            daysToRender.map((day) => {
+                              const dateStr = `${pontoYear}-${String(pontoMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                              const record = empRecords.find((r) => r.date === dateStr);
+                              const dateObj = new Date(pontoYear, pontoMonth, day);
+                              const weekDay = WEEKDAYS_PT[dateObj.getDay()];
+
                               return (
-                                <tr key={r.id}>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 font-bold">{r.date}</td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 uppercase text-[10px] font-semibold text-slate-500">
-                                    {d.toLocaleDateString('pt-BR', { weekday: 'short' })}
+                                <tr key={day} className="h-5">
+                                  <td className="border border-black font-mono font-bold text-center">
+                                    {String(day).padStart(2, '0')}
                                   </td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 text-center font-mono">{r.entry1 || '--:--'}</td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 text-center font-mono">{r.exit1 || '--:--'}</td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 text-center font-mono">{r.entry2 || '--:--'}</td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 text-center font-mono">{r.exit2 || '--:--'}</td>
-                                  <td className="py-1.5 px-3 border-r border-slate-200 text-center font-bold">{r.totalHours ? `${r.totalHours}h` : '--'}</td>
-                                  <td className="py-1.5 px-3 text-center font-semibold text-[10px] uppercase">
-                                    {hasAdj ? `${r.status} (Ajustado RH)` : r.status}
+                                  <td className="border border-black font-semibold text-center uppercase">
+                                    {weekDay}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {record?.entry1 || ''}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {record?.exit1 || ''}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {record?.entry2 || ''}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {record?.exit2 || ''}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {/* Hora Extra Entrada */}
+                                  </td>
+                                  <td className="border border-black font-mono text-center">
+                                    {/* Hora Extra Saída */}
+                                  </td>
+                                  <td className="border border-black font-mono text-center font-bold">
+                                    {record?.extraHours ? `${record.extraHours}h` : ''}
+                                  </td>
+                                  <td className="border border-black text-center font-serif text-[11px] text-slate-700 italic">
+                                    {record && (record.entry1 || record.exit1) ? '' : ''}
                                   </td>
                                 </tr>
                               );
@@ -4304,21 +4662,79 @@ export const RecursosHumanosModule: React.FC = () => {
                       </table>
                     </div>
 
-                    {/* Signatures */}
-                    <div className="pt-16 grid grid-cols-2 gap-12 text-center text-xs">
-                      <div className="border-t border-slate-900 pt-2">
-                        <span className="font-bold block">{targetEmp?.name}</span>
-                        <span className="text-[10px] text-slate-500">Assinatura do Colaborador</span>
+                    {/* Cards de Resumo no Final da Folha (Image 2) quando Selecionar Todos ou dias selecionados */}
+                    {selectAllDaysForPrint && (
+                      <div className="grid grid-cols-3 gap-3 pt-2">
+                        <div className="border border-slate-400 rounded-xl p-3 flex items-center gap-3 bg-white shadow-2xs">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                            <CalendarDays className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
+                              DIAS REGISTRADOS
+                            </span>
+                            <span className="text-base font-black text-slate-900">
+                              {computedDaysWorked} dias
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-400 rounded-xl p-3 flex items-center gap-3 bg-white shadow-2xs">
+                          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+                            <Clock className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
+                              TOTAL HORAS TRABALHADAS
+                            </span>
+                            <span className="text-base font-black text-emerald-700">
+                              {computedTotalHours} hrs
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-400 rounded-xl p-3 flex items-center gap-3 bg-white shadow-2xs">
+                          <div className="p-2 bg-orange-50 text-orange-600 rounded-xl border border-orange-100">
+                            <Sparkles className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
+                              SALDO HORAS EXTRAS / BANCO
+                            </span>
+                            <span className={`text-base font-black ${computedTotalExtra >= 0 ? 'text-orange-600' : 'text-rose-600'}`}>
+                              {computedTotalExtra > 0 ? `+${computedTotalExtra}` : computedTotalExtra} hrs
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="border-t border-slate-900 pt-2">
-                        <span className="font-bold block">{settings.name || 'Gerência OperaFácil'}</span>
-                        <span className="text-[10px] text-slate-500">Assinatura do Gestor / RH</span>
+                    )}
+
+                    {/* Legal Note & Acknowledgment matching Image 3 */}
+                    <div className="space-y-1 pt-1 text-[10px] text-black">
+                      <p className="font-semibold">
+                        Obs.: Substitui o Quadro de Horário de Trabalho, de acordo com o disposto na Portaria Ministerial nº 3162 de 08/09/1982
+                      </p>
+                      <p className="font-semibold">
+                        Reconheço a exatidão destas anotações. Data: _____ / _____ / _________
+                      </p>
+                    </div>
+
+                    {/* Dual Signatures matching Image 3 */}
+                    <div className="pt-6 grid grid-cols-2 gap-16 text-center text-xs text-black">
+                      <div>
+                        <div className="border-t border-black pt-1">
+                          <span className="font-bold text-[11px] uppercase">Visto chefia</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="border-t border-black pt-1">
+                          <span className="font-bold text-[11px] uppercase">Visto funcionário</span>
+                        </div>
                       </div>
                     </div>
                   </>
                 );
               })()}
-
             </div>
 
           </div>
