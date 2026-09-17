@@ -81,8 +81,8 @@ export const INITIAL_EMPLOYEE_DOCUMENTS: EmployeeDocument[] = [];
 export const INITIAL_SETTINGS: StoreSettings = {
   name: 'TemNet',
   slogan: 'Sua conexão completa',
-  cnpj: '12.345.678/0001-90',
-  phone: '(11) 3456-7890',
+  cnpj: '58.232.657/0001-64',
+  phone: '(75) 3198 - 0000',
   address: 'RUA DOUTOR RENATO VASCONCELOS BITTENCOURT - 169 - ALAGOINHAS - BA',
   receiptFooter: 'TemNet, a sua conexão completa.',
   logoUrl: '',

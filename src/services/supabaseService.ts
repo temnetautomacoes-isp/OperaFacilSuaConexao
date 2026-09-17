@@ -123,7 +123,10 @@ export const supabaseService = {
     const payload: any = {
       id: 'default',
     };
-    if (settings.name !== undefined) payload.name = settings.name;
+    if (settings.name !== undefined) {
+      payload.name = settings.name;
+      payload.social_reason = settings.name;
+    }
     if (settings.slogan !== undefined) payload.tagline = settings.slogan;
     if (settings.cnpj !== undefined) payload.cnpj = settings.cnpj;
     if (settings.phone !== undefined) payload.phone = settings.phone;
