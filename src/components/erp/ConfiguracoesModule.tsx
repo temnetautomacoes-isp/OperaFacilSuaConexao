@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { safeConfirm } from '../../utils/safeConfirm';
 import { UserAccount, UserPermissions } from '../../types';
